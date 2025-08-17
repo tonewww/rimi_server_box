@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'package:server_box/core/extension/context/locale.dart';
-import 'package:server_box/core/extension/ssh_client.dart';
 import 'package:server_box/core/route.dart';
 import 'package:server_box/data/model/app/net_view.dart';
 import 'package:server_box/data/model/app/scripts/cmd_types.dart';
@@ -43,7 +42,8 @@ class ServerPage extends StatefulWidget {
 const _cardPad = 74.0;
 const _cardPadSingle = 13.0;
 
-class _ServerPageState extends State<ServerPage> with AutomaticKeepAliveClientMixin, AfterLayoutMixin {
+class _ServerPageState extends State<ServerPage>
+    with AutomaticKeepAliveClientMixin, AfterLayoutMixin {
   late double _textFactorDouble;
   double _offset = 1;
   late TextScaler _textFactor;
@@ -96,7 +96,11 @@ class _ServerPageState extends State<ServerPage> with AutomaticKeepAliveClientMi
 
   Widget _buildScaffold(Widget child) {
     return Scaffold(
-      appBar: _TopBar(tags: ServerProvider.tags, onTagChanged: (p0) => _tag.value = p0, initTag: _tag.value),
+      appBar: _TopBar(
+        tags: ServerProvider.tags,
+        onTagChanged: (p0) => _tag.value = p0,
+        initTag: _tag.value,
+      ),
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _autoHideCtrl.show,
@@ -149,7 +153,10 @@ class _ServerPageState extends State<ServerPage> with AutomaticKeepAliveClientMi
     return LayoutBuilder(
       builder: (_, cons) {
         // Calculate number of columns based on available width
-        final columnsCount = math.max(1, (cons.maxWidth / UIs.columnWidth).floor());
+        final columnsCount = math.max(
+          1,
+          (cons.maxWidth / UIs.columnWidth).floor(),
+        );
         final padding = columnsCount > 1
             ? const EdgeInsets.fromLTRB(0, 0, 5, 7)
             : const EdgeInsets.fromLTRB(7, 0, 7, 7);
@@ -173,7 +180,9 @@ class _ServerPageState extends State<ServerPage> with AutomaticKeepAliveClientMi
                   // Last item is just spacing
                   if (index == lens) return SizedBox(height: 77);
 
-                  final vnode = ServerProvider.pick(id: serversInThisColumn[index]);
+                  final vnode = ServerProvider.pick(
+                    id: serversInThisColumn[index],
+                  );
                   if (vnode == null) return UIs.placeholder;
 
                   return vnode.listenVal(_buildEachServerCard);
@@ -209,7 +218,11 @@ class _ServerPageState extends State<ServerPage> with AutomaticKeepAliveClientMi
 
   /// The child's width mat not equal to 1/4 of the screen width,
   /// so we need to wrap it with a SizedBox.
-  Widget _wrapWithSizedbox(Widget child, double maxWidth, [bool circle = false]) {
+  Widget _wrapWithSizedbox(
+    Widget child,
+    double maxWidth, [
+    bool circle = false,
+  ]) {
     return LayoutBuilder(
       builder: (_, cons) {
         final width = (maxWidth - _cardPad) / 4;
@@ -313,14 +326,23 @@ class _ServerPageState extends State<ServerPage> with AutomaticKeepAliveClientMi
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _wrapWithSizedbox(PercentCircle(percent: ss.cpu.usedPercent()), maxWidth, true),
-                _wrapWithSizedbox(PercentCircle(percent: ss.mem.usedPercent * 100), maxWidth, true),
+                _wrapWithSizedbox(
+                  PercentCircle(percent: ss.cpu.usedPercent()),
+                  maxWidth,
+                  true,
+                ),
+                _wrapWithSizedbox(
+                  PercentCircle(percent: ss.mem.usedPercent * 100),
+                  maxWidth,
+                  true,
+                ),
                 _wrapWithSizedbox(_buildNet(ss, spi.id), maxWidth),
                 _wrapWithSizedbox(_buildDisk(ss, spi.id), maxWidth),
               ],
             ),
             UIs.height13,
-            if (Stores.setting.moveServerFuncs.fetch()) SizedBox(height: 27, child: ServerFuncBtns(spi: spi)),
+            if (Stores.setting.moveServerFuncs.fetch())
+              SizedBox(height: 27, child: ServerFuncBtns(spi: spi)),
           ],
         );
       },

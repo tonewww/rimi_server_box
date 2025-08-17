@@ -23,7 +23,14 @@
       "Bash(nm:*)",
       "Bash(r)",
       "Bash(pkill:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(ping:*)",
+      "Bash(telnet:*)",
+      "Bash(nc:*)",
+      "Bash(ssh:*)",
+      "Bash(timeout:*)",
+      "Bash(echo:*)"
     ],
     "deny": [],
     "ask": []

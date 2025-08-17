@@ -1,11 +1,10 @@
 import 'dart:async';
 
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
-import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/foundation.dart';
 import 'package:server_box/data/model/app/error.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
 import 'package:server_box/data/res/store.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 /// Must put this func out of any Class.
 ///
@@ -56,7 +55,7 @@ Future<SSHClient> genClient(
   }
 
   final keyId = spi.keyId;
-  
+
   // Use direct connection with our new adapter
   if (keyId == null) {
     // Password authentication

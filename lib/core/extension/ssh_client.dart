@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/widgets.dart';
 import 'package:server_box/data/model/server/system.dart';
-
 import 'package:server_box/data/res/misc.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 typedef OnStdout = void Function(String data, SSHSession session);
 typedef OnStdin = void Function(SSHSession session);
@@ -74,7 +73,8 @@ extension SSHClientX on SSHClient {
     final session = await execute(
       entry ??
           switch (systemType) {
-            SystemType.windows => 'powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass',
+            SystemType.windows =>
+              'powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass',
             _ => 'cat | sh',
           },
       pty: pty,
@@ -132,9 +132,13 @@ extension SSHClientX on SSHClient {
         if (data.contains('[sudo] password for ')) {
           isRequestingPwd = true;
           final user = Miscs.pwdRequestWithUserReg.firstMatch(data)?.group(1);
-          final ctx = context ?? WidgetsBinding.instance.focusManager.primaryFocus?.context;
+          final ctx =
+              context ??
+              WidgetsBinding.instance.focusManager.primaryFocus?.context;
           if (ctx == null) return;
-          final pwd = ctx.mounted ? await ctx.showPwdDialog(title: user, id: id) : null;
+          final pwd = ctx.mounted
+              ? await ctx.showPwdDialog(title: user, id: id)
+              : null;
           if (pwd == null || pwd.isEmpty) {
             session.stdin.close();
           } else {

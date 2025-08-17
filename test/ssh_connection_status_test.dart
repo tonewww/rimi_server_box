@@ -1,7 +1,7 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart';
-import 'package:server_box/data/ssh/session_manager.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
+import 'package:server_box/data/ssh/session_manager.dart';
 
 void main() {
   group('SSH Connection Status Tests', () {
@@ -33,23 +33,41 @@ void main() {
       );
 
       // Verify initial status
-      expect(TermSessionManager.entries.containsKey('ssh_test-server-1'), isTrue);
-      expect(TermSessionManager.entries['ssh_test-server-1']?.status, 
-             equals(TermSessionStatus.connecting));
+      expect(
+        TermSessionManager.entries.containsKey('ssh_test-server-1'),
+        isTrue,
+      );
+      expect(
+        TermSessionManager.entries['ssh_test-server-1']?.status,
+        equals(TermSessionStatus.connecting),
+      );
 
       // Update to connected
-      TermSessionManager.updateStatus('ssh_test-server-1', TermSessionStatus.connected);
-      expect(TermSessionManager.entries['ssh_test-server-1']?.status, 
-             equals(TermSessionStatus.connected));
+      TermSessionManager.updateStatus(
+        'ssh_test-server-1',
+        TermSessionStatus.connected,
+      );
+      expect(
+        TermSessionManager.entries['ssh_test-server-1']?.status,
+        equals(TermSessionStatus.connected),
+      );
 
       // Update to disconnected
-      TermSessionManager.updateStatus('ssh_test-server-1', TermSessionStatus.disconnected);
-      expect(TermSessionManager.entries['ssh_test-server-1']?.status, 
-             equals(TermSessionStatus.disconnected));
+      TermSessionManager.updateStatus(
+        'ssh_test-server-1',
+        TermSessionStatus.disconnected,
+      );
+      expect(
+        TermSessionManager.entries['ssh_test-server-1']?.status,
+        equals(TermSessionStatus.disconnected),
+      );
 
       // Remove session
       TermSessionManager.remove('ssh_test-server-1');
-      expect(TermSessionManager.entries.containsKey('ssh_test-server-1'), isFalse);
+      expect(
+        TermSessionManager.entries.containsKey('ssh_test-server-1'),
+        isFalse,
+      );
     });
 
     test('TermSessionManager should handle multiple sessions', () {
@@ -63,7 +81,7 @@ void main() {
       );
 
       final spi2 = Spi(
-        id: 'test-server-2', 
+        id: 'test-server-2',
         name: 'Test Server 2',
         ip: '192.168.1.100',
         port: 22,
@@ -91,13 +109,23 @@ void main() {
       expect(TermSessionManager.entries.length, equals(2));
 
       // Update different statuses
-      TermSessionManager.updateStatus('ssh_test-server-1', TermSessionStatus.connected);
-      TermSessionManager.updateStatus('ssh_test-server-2', TermSessionStatus.disconnected);
+      TermSessionManager.updateStatus(
+        'ssh_test-server-1',
+        TermSessionStatus.connected,
+      );
+      TermSessionManager.updateStatus(
+        'ssh_test-server-2',
+        TermSessionStatus.disconnected,
+      );
 
-      expect(TermSessionManager.entries['ssh_test-server-1']?.status, 
-             equals(TermSessionStatus.connected));
-      expect(TermSessionManager.entries['ssh_test-server-2']?.status, 
-             equals(TermSessionStatus.disconnected));
+      expect(
+        TermSessionManager.entries['ssh_test-server-1']?.status,
+        equals(TermSessionStatus.connected),
+      );
+      expect(
+        TermSessionManager.entries['ssh_test-server-2']?.status,
+        equals(TermSessionStatus.disconnected),
+      );
 
       // Clean up
       TermSessionManager.remove('ssh_test-server-1');
@@ -105,11 +133,17 @@ void main() {
       expect(TermSessionManager.entries.isEmpty, isTrue);
     });
 
-    test('TermSessionStatus enum should have correct string representation', () {
-      expect(TermSessionStatus.connecting.toString(), equals('Connecting'));
-      expect(TermSessionStatus.connected.toString(), equals('Connected'));
-      expect(TermSessionStatus.disconnected.toString(), equals('Disconnected'));
-    });
+    test(
+      'TermSessionStatus enum should have correct string representation',
+      () {
+        expect(TermSessionStatus.connecting.toString(), equals('Connecting'));
+        expect(TermSessionStatus.connected.toString(), equals('Connected'));
+        expect(
+          TermSessionStatus.disconnected.toString(),
+          equals('Disconnected'),
+        );
+      },
+    );
 
     test('TermSessionInfo should serialize to JSON correctly', () {
       final info = TermSessionInfo(

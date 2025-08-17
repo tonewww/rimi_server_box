@@ -20,8 +20,8 @@ import 'package:server_box/data/provider/snippet.dart';
 import 'package:server_box/data/res/build_data.dart';
 import 'package:server_box/data/res/store.dart';
 import 'package:server_box/data/ssh/session_manager.dart';
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:server_box/data/store/server.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:server_box/hive/hive_registrar.g.dart';
 
 Future<void> main() async {
@@ -38,7 +38,11 @@ void _runInZone(void Function() body) {
     },
   );
 
-  runZonedGuarded(body, (e, s) => print('[ZONE] $e\n$s'), zoneSpecification: zoneSpec);
+  runZonedGuarded(
+    body,
+    (e, s) => print('[ZONE] $e\n$s'),
+    zoneSpecification: zoneSpec,
+  );
 }
 
 Future<void> _initApp() async {
@@ -52,7 +56,7 @@ Future<void> _initApp() async {
 
   // Initialize Android session notification channel/handler
   TermSessionManager.init();
-  
+
   // Initialize SSH isolate for non-blocking SSH operations
   await IsolateSSHClient.initialize();
 }
@@ -64,21 +68,25 @@ Future<void> _initData() async {
   Hive.registerAdapters();
 
   await PrefStore.shared.init(); // Call this before accessing any store
-  
+
   try {
     await Stores.init();
   } catch (e) {
     print('Store initialization failed: $e');
-    
+
     // Check if it's a keychain/secure storage error
-    if (e.toString().contains('-34018') || 
+    if (e.toString().contains('-34018') ||
         e.toString().contains('authorization') ||
         e.toString().contains('entitlement') ||
         e.toString().contains('keychain')) {
       print('Keychain/secure storage error detected.');
-      print('This is likely due to macOS entitlement issues or missing code signing.');
+      print(
+        'This is likely due to macOS entitlement issues or missing code signing.',
+      );
       print('To fix this issue:');
-      print('1. Add proper keychain entitlements to macos/Runner/DebugProfile.entitlements');
+      print(
+        '1. Add proper keychain entitlements to macos/Runner/DebugProfile.entitlements',
+      );
       print('2. Configure code signing in Xcode project settings');
       print('3. Or run on a device with proper provisioning profile');
       print('');
@@ -86,7 +94,7 @@ Future<void> _initData() async {
       print('- Running tests instead: flutter test');
       print('- Using a different platform (iOS/Android) if available');
       print('- Configuring proper macOS development team and signing');
-      
+
       // For now, we'll terminate gracefully rather than crash
       exit(1);
     } else {
@@ -126,7 +134,9 @@ void _doPlatformRelated() async {
   }
 
   final serversCount = Stores.server.keys().length;
-  Computer.shared.turnOn(workersCount: (serversCount / 3).round() + 1); // Plus 1 to avoid 0.
+  Computer.shared.turnOn(
+    workersCount: (serversCount / 3).round() + 1,
+  ); // Plus 1 to avoid 0.
 
   bakSync.sync();
 }

@@ -1,7 +1,7 @@
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
 import 'package:server_box/data/model/server/system.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 /// Helper class for detecting remote system types
 class SystemDetector {
@@ -17,7 +17,9 @@ class SystemDetector {
     // First, check if custom system type is defined
     SystemType? detectedSystemType = spi.customSystemType;
     if (detectedSystemType != null) {
-      dprint('Using custom system type ${detectedSystemType.name} for ${spi.oldId}');
+      dprint(
+        'Using custom system type ${detectedSystemType.name} for ${spi.oldId}',
+      );
       return detectedSystemType;
     }
 
@@ -25,7 +27,8 @@ class SystemDetector {
       // Try to detect Windows systems first (more reliable detection)
       final powershellResult = (await client.run('ver 2>nul')).string;
       if (powershellResult.isNotEmpty &&
-          (powershellResult.contains('Windows') || powershellResult.contains('NT'))) {
+          (powershellResult.contains('Windows') ||
+              powershellResult.contains('NT'))) {
         detectedSystemType = SystemType.windows;
         dprint('Detected Windows system type for ${spi.oldId}');
         return detectedSystemType;

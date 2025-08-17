@@ -1,18 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
-import 'package:server_box/core/extension/ssh_client.dart';
 import 'package:server_box/data/model/app/error.dart';
 import 'package:server_box/data/model/app/scripts/script_consts.dart';
 import 'package:server_box/data/model/container/image.dart';
 import 'package:server_box/data/model/container/ps.dart';
 import 'package:server_box/data/model/container/type.dart';
 import 'package:server_box/data/res/store.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
-final _dockerNotFound = RegExp(r"command not found|Unknown command|Command '\w+' not found");
+final _dockerNotFound = RegExp(
+  r"command not found|Unknown command|Command '\w+' not found",
+);
 
 class ContainerProvider extends ChangeNotifier {
   final SSHClient? client;
@@ -89,7 +90,9 @@ class ContainerProvider extends ChangeNotifier {
     final includeStats = Stores.setting.containerParseStat.fetch();
 
     var raw = '';
-    final cmd = _wrap(ContainerCmdType.execAll(type, sudo: sudo, includeStats: includeStats));
+    final cmd = _wrap(
+      ContainerCmdType.execAll(type, sudo: sudo, includeStats: includeStats),
+    );
     final code = await client?.execWithPwd(
       cmd,
       context: context,
@@ -125,7 +128,10 @@ class ContainerProvider extends ChangeNotifier {
     try {
       version = json.decode(verRaw)['Client']['Version'];
     } catch (e, trace) {
-      error = ContainerErr(type: ContainerErrType.invalidVersion, message: '$e');
+      error = ContainerErr(
+        type: ContainerErrType.invalidVersion,
+        message: '$e',
+      );
       Loggers.app.warning('Container version failed', e, trace);
     } finally {
       notifyListeners();
@@ -244,7 +250,10 @@ class ContainerProvider extends ChangeNotifier {
     notifyListeners();
 
     if (code != 0) {
-      return ContainerErr(type: ContainerErrType.unknown, message: errs.join('\n').trim());
+      return ContainerErr(
+        type: ContainerErrType.unknown,
+        message: errs.join('\n').trim(),
+      );
     }
     if (autoRefresh) await refresh();
     return null;
@@ -273,7 +282,11 @@ enum ContainerCmdType {
   // and don't require splitting output with ScriptConstants.separator
   ;
 
-  String exec(ContainerType type, {bool sudo = false, bool includeStats = false}) {
+  String exec(
+    ContainerType type, {
+    bool sudo = false,
+    bool includeStats = false,
+  }) {
     final prefix = sudo ? 'sudo -S ${type.name}' : type.name;
     return switch (this) {
       ContainerCmdType.version => '$prefix version $_jsonFmt',
@@ -288,12 +301,17 @@ enum ContainerCmdType {
               ' .ID .Status .Names .Image}}"',
         ContainerType.podman => '$prefix ps -a $_jsonFmt',
       },
-      ContainerCmdType.stats => includeStats ? '$prefix stats --no-stream $_jsonFmt' : 'echo PASS',
+      ContainerCmdType.stats =>
+        includeStats ? '$prefix stats --no-stream $_jsonFmt' : 'echo PASS',
       ContainerCmdType.images => '$prefix image ls $_jsonFmt',
     };
   }
 
-  static String execAll(ContainerType type, {bool sudo = false, bool includeStats = false}) {
+  static String execAll(
+    ContainerType type, {
+    bool sudo = false,
+    bool includeStats = false,
+  }) {
     return ContainerCmdType.values
         .map((e) => e.exec(type, sudo: sudo, includeStats: includeStats))
         .join('\necho ${ScriptConstants.separator}\n');

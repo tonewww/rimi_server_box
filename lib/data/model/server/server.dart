@@ -1,4 +1,3 @@
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/data/model/app/scripts/cmd_types.dart';
 import 'package:server_box/data/model/server/amd.dart';
@@ -14,6 +13,7 @@ import 'package:server_box/data/model/server/sensors.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
 import 'package:server_box/data/model/server/system.dart';
 import 'package:server_box/data/model/server/temp.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 class Server {
   Spi spi;

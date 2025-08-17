@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:computer/computer.dart';
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:fl_lib/fl_lib.dart';
@@ -11,6 +10,7 @@ import 'package:server_box/core/extension/context/locale.dart';
 import 'package:server_box/data/model/app/error.dart';
 import 'package:server_box/data/model/server/pve.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 typedef PveCtrlFunc = Future<bool> Function(String node, String id);
 

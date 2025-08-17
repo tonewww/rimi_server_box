@@ -466,15 +466,17 @@ class ServerProvider extends Provider {
     String? raw;
 
     try {
-      raw = (await sv.client
-          ?.run(ShellFunc.status.exec(spi.id, systemType: sv.status.system)))
-          ?.string ?? '';
+      raw =
+          (await sv.client?.run(
+            ShellFunc.status.exec(spi.id, systemType: sv.status.system),
+          ))?.string ??
+          '';
       //dprint('Get status from ${spi.name}:\n$raw');
       segments = raw
-          ?.split(ScriptConstants.separator)
+          .split(ScriptConstants.separator)
           .map((e) => e.trim())
           .toList();
-      if (raw?.isEmpty ?? true || segments == null || segments.isEmpty) {
+      if (raw.isEmpty ?? true || segments == null || segments.isEmpty) {
         if (Stores.setting.keepStatusWhenErr.fetch()) {
           // Keep previous server status when err occurs
           if (sv.conn != ServerConn.failed && sv.status.more.isNotEmpty) {

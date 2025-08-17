@@ -3,17 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:icons_plus/icons_plus.dart';
 import 'package:provider/provider.dart';
-
 import 'package:server_box/core/chan.dart';
 import 'package:server_box/core/extension/context/locale.dart';
 import 'package:server_box/core/utils/server.dart';
-import 'package:server_box/core/utils/ssh_auth.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
 import 'package:server_box/data/model/server/snippet.dart';
 import 'package:server_box/data/model/ssh/virtual_key.dart';
@@ -22,8 +19,8 @@ import 'package:server_box/data/provider/virtual_keyboard.dart';
 import 'package:server_box/data/res/store.dart';
 import 'package:server_box/data/res/terminal.dart';
 import 'package:server_box/data/ssh/session_manager.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:server_box/view/page/storage/sftp.dart';
-
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:xterm/core.dart';
 import 'package:xterm/ui.dart' hide TerminalThemes;
@@ -60,18 +57,27 @@ class SSHPage extends StatefulWidget {
   @override
   State<SSHPage> createState() => SSHPageState();
 
-  static const route = AppRouteArg<void, SshPageArgs>(page: SSHPage.new, path: '/ssh/page');
+  static const route = AppRouteArg<void, SshPageArgs>(
+    page: SSHPage.new,
+    path: '/ssh/page',
+  );
 }
 
 const _horizonPadding = 7.0;
 
 class SSHPageState extends State<SSHPage>
-    with AutomaticKeepAliveClientMixin, AfterLayoutMixin, TickerProviderStateMixin {
+    with
+        AutomaticKeepAliveClientMixin,
+        AfterLayoutMixin,
+        TickerProviderStateMixin {
   final _keyboard = VirtKeyProvider();
   late final _terminal = Terminal(inputHandler: _keyboard);
-  late final TerminalController _terminalController = TerminalController(vsync: this);
+  late final TerminalController _terminalController = TerminalController(
+    vsync: this,
+  );
   final List<List<VirtKey>> _virtKeysList = [];
-  late final _termKey = widget.args.terminalKey ?? GlobalKey<TerminalViewState>();
+  late final _termKey =
+      widget.args.terminalKey ?? GlobalKey<TerminalViewState>();
 
   late MediaQueryData _media;
   late TerminalStyle _terminalStyle;
@@ -201,12 +207,18 @@ class SSHPageState extends State<SSHPage>
     final blur = Stores.setting.sshBlurRadius.fetch();
     final file = File(bgImage);
     final hasBg = bgImage.isNotEmpty && file.existsSync();
-    final theme = hasBg ? _terminalTheme.copyWith(background: Colors.transparent) : _terminalTheme;
+    final theme = hasBg
+        ? _terminalTheme.copyWith(background: Colors.transparent)
+        : _terminalTheme;
     final children = <Widget>[];
     if (hasBg) {
       children.add(
         Positioned.fill(
-          child: Image.file(file, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox()),
+          child: Image.file(
+            file,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => const SizedBox(),
+          ),
         ),
       );
       if (blur > 0) {
@@ -221,7 +233,9 @@ class SSHPageState extends State<SSHPage>
       }
       children.add(
         Positioned.fill(
-          child: ColoredBox(color: _terminalTheme.background.withValues(alpha: opacity)),
+          child: ColoredBox(
+            color: _terminalTheme.background.withValues(alpha: opacity),
+          ),
         ),
       );
     }
@@ -241,7 +255,10 @@ class SSHPageState extends State<SSHPage>
           autofocus: false,
           keyboardAppearance: _isDark ? Brightness.dark : Brightness.light,
           showToolbar: isMobile,
-          viewOffset: Offset(2 * _horizonPadding, CustomAppBar.sysStatusBarHeight),
+          viewOffset: Offset(
+            2 * _horizonPadding,
+            CustomAppBar.sysStatusBarHeight,
+          ),
           hideScrollBar: false,
           focusNode: widget.args.focusNode,
         ),
@@ -249,7 +266,11 @@ class SSHPageState extends State<SSHPage>
     );
 
     return SizedBox(
-      height: _media.size.height - _virtKeysHeight - _media.padding.bottom - _media.padding.top,
+      height:
+          _media.size.height -
+          _virtKeysHeight -
+          _media.padding.bottom -
+          _media.padding.top,
       child: Stack(children: children),
     );
   }
@@ -275,7 +296,9 @@ class SSHPageState extends State<SSHPage>
   }
 
   Widget _buildVirtualKey() {
-    final count = _horizonVirtKeys ? _virtKeysList.length : _virtKeysList.firstOrNull?.length ?? 0;
+    final count = _horizonVirtKeys
+        ? _virtKeysList.length
+        : _virtKeysList.firstOrNull?.length ?? 0;
     if (count == 0) return UIs.placeholder;
     return LayoutBuilder(
       builder: (_, cons) {
@@ -292,7 +315,13 @@ class SSHPageState extends State<SSHPage>
           );
         }
         final rows = _virtKeysList
-            .map((e) => Row(children: e.map((e) => _buildVirtKeyItem(e, virtKeyWidth)).toList()))
+            .map(
+              (e) => Row(
+                children: e
+                    .map((e) => _buildVirtKeyItem(e, virtKeyWidth))
+                    .toList(),
+              ),
+            )
             .toList();
         return Column(mainAxisSize: MainAxisSize.min, children: rows);
       },
@@ -316,11 +345,17 @@ class SSHPageState extends State<SSHPage>
     }
 
     final child = item.icon != null
-        ? Icon(item.icon, size: 17, color: _isDark ? Colors.white : Colors.black)
+        ? Icon(
+            item.icon,
+            size: 17,
+            color: _isDark ? Colors.white : Colors.black,
+          )
         : Text(
             item.text,
             style: TextStyle(
-              color: selected ? UIs.primaryColor : (_isDark ? Colors.white : Colors.black),
+              color: selected
+                  ? UIs.primaryColor
+                  : (_isDark ? Colors.white : Colors.black),
               fontSize: 15,
             ),
           );

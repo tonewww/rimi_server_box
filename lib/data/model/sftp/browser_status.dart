@@ -1,5 +1,5 @@
-import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 /// Remote server only can be linux-like system, so use '/' as seperator
 const _sep = '/';
