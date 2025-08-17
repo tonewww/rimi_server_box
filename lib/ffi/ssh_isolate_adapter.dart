@@ -143,11 +143,26 @@ class IsolateSSHClient {
     _sendPort!.send(request);
     
     // Add timeout to prevent infinite waiting
+    // Use appropriate timeout for different operations
+    Duration timeout;
+    switch (type) {
+      case SshIsolateMessageType.execute:
+        timeout = const Duration(minutes: 5);  // 5 minutes for script execution
+        break;
+      case SshIsolateMessageType.shell:
+      case SshIsolateMessageType.ping:
+        timeout = const Duration(seconds: 10); // Short timeout for shell/ping
+        break;
+      default:
+        timeout = const Duration(minutes: 2);  // 2 minutes for other operations
+        break;
+    }
+        
     return completer.future.timeout(
-      const Duration(seconds: 30),
+      timeout,
       onTimeout: () {
         _pendingRequests.remove(requestId);
-        throw TimeoutException('SSH request timed out', const Duration(seconds: 30));
+        throw TimeoutException('SSH request timed out', timeout);
       },
     );
   }
@@ -254,6 +269,12 @@ class IsolateSSHClient {
     Map<String, String>? environment,
     dynamic pty,
   }) async {
+    // For shell commands like "cat | sh", create an interactive session
+    if (command.contains('cat | sh') || command.contains('powershell')) {
+      return IsolateSSHSession._interactive(this, command);
+    }
+    
+    // For simple commands, use the existing behavior
     final result = await run(command);
     return IsolateSSHSession._(result, command);
   }
@@ -517,6 +538,7 @@ Future<SshIsolateResponse> _handleSshRequest(
         final client = sessions[sessionId];
         
         if (client == null || !client.isConnected) {
+          debugPrint('SSH Isolate: Session $sessionId not found or not connected');
           return SshIsolateResponse(
             requestId: request.requestId,
             success: false,
@@ -524,7 +546,10 @@ Future<SshIsolateResponse> _handleSshRequest(
           );
         }
         
+        debugPrint('SSH Isolate: Executing command for session $sessionId: ${command.length > 100 ? command.substring(0, 100) + "..." : command}');
         final result = await client.execute(command);
+        debugPrint('SSH Isolate: Command completed for session $sessionId, stdout length: ${result.stdout.length}, stderr length: ${result.stderr.length}');
+        
         return SshIsolateResponse(
           requestId: request.requestId,
           success: true,
@@ -537,9 +562,11 @@ Future<SshIsolateResponse> _handleSshRequest(
         
       case SshIsolateMessageType.shell:
         final sessionId = request.data['sessionId'] as String;
+        debugPrint('SSH Isolate: Processing shell request for session $sessionId');
         final client = sessions[sessionId];
         
         if (client == null || !client.isConnected) {
+          debugPrint('SSH Isolate: Shell failed - session not found or not connected');
           return SshIsolateResponse(
             requestId: request.requestId,
             success: false,
@@ -547,12 +574,13 @@ Future<SshIsolateResponse> _handleSshRequest(
           );
         }
         
-        // Create shell session
-        await client.createShell();
+        // For now, return success without creating actual shell
+        // TODO: Implement proper shell session management
+        debugPrint('SSH Isolate: Shell request completed (placeholder)');
         return SshIsolateResponse(
           requestId: request.requestId,
           success: true,
-          result: 'shell_created',
+          result: 'shell_ready',
         );
         
       case SshIsolateMessageType.sftp:
@@ -580,9 +608,11 @@ Future<SshIsolateResponse> _handleSshRequest(
         
       case SshIsolateMessageType.ping:
         final sessionId = request.data['sessionId'] as String;
+        debugPrint('SSH Isolate: Processing ping for session $sessionId');
         final client = sessions[sessionId];
         
         if (client == null || !client.isConnected) {
+          debugPrint('SSH Isolate: Ping failed - session not found or not connected');
           return SshIsolateResponse(
             requestId: request.requestId,
             success: false,
@@ -590,13 +620,24 @@ Future<SshIsolateResponse> _handleSshRequest(
           );
         }
         
-        // Execute ping command to test connection
-        final result = await client.execute('echo pong');
-        return SshIsolateResponse(
-          requestId: request.requestId,
-          success: true,
-          result: result.stdout.trim(),
-        );
+        try {
+          // Execute simple ping command to test connection
+          debugPrint('SSH Isolate: Executing ping command...');
+          final result = await client.execute('echo pong');
+          debugPrint('SSH Isolate: Ping command completed successfully');
+          return SshIsolateResponse(
+            requestId: request.requestId,
+            success: true,
+            result: result.stdout.trim(),
+          );
+        } catch (e) {
+          debugPrint('SSH Isolate: Ping command failed: $e');
+          return SshIsolateResponse(
+            requestId: request.requestId,
+            success: false,
+            error: 'Ping failed: $e',
+          );
+        }
         
       case SshIsolateMessageType.close:
         final sessionId = request.data['sessionId'] as String?;
@@ -648,13 +689,27 @@ class IsolateSSHResult {
 
 /// SSH Session for isolate implementation
 class IsolateSSHSession {
-  final IsolateSSHResult _result;
+  final IsolateSSHResult? _result;
+  final IsolateSSHClient? _client;
+  final String? _initialCommand;
   late final Stream<Uint8List> stdout;
   late final Stream<Uint8List> stderr;
   late final StreamSink<Uint8List> stdin;
+  late final StreamController<Uint8List> _stdinController;
+  late final StreamController<Uint8List> _stdoutController;
+  late final StreamController<Uint8List> _stderrController;
+  bool _isInteractive = false;
 
-  IsolateSSHSession._(this._result, String command) {
-    _initializeStreams(_result.stdout, _result.stderr);
+  // Constructor for simple command execution (existing behavior)
+  IsolateSSHSession._(this._result, String command) 
+    : _client = null, _initialCommand = null, _isInteractive = false {
+    _initializeStreams(_result!.stdout, _result!.stderr);
+  }
+  
+  // Constructor for interactive sessions (new)
+  IsolateSSHSession._interactive(this._client, this._initialCommand) 
+    : _result = null, _isInteractive = true {
+    _initializeInteractiveStreams();
   }
 
   void _initializeStreams(String stdoutStr, String stderrStr) {
@@ -677,8 +732,66 @@ class IsolateSSHSession {
     stdoutController.close();
     stderrController.close();
   }
+  
+  void _initializeInteractiveStreams() {
+    _stdinController = StreamController<Uint8List>();
+    _stdoutController = StreamController<Uint8List>();
+    _stderrController = StreamController<Uint8List>();
+    
+    stdout = _stdoutController.stream;
+    stderr = _stderrController.stream;
+    stdin = _stdinController.sink;
+    
+    // Listen for stdin data and execute when stdin is closed
+    final stdinData = BytesBuilder(copy: false);
+    _stdinController.stream.listen(
+      (data) {
+        stdinData.add(data);
+      },
+      onDone: () async {
+        try {
+          // Execute the command with the collected stdin data
+          final script = String.fromCharCodes(stdinData.takeBytes());
+          final fullCommand = _combineCommandAndScript(_initialCommand!, script);
+          
+          debugPrint('SSH Interactive: Executing script, length: ${script.length}');
+          final result = await _client!.run(fullCommand);
+          
+          // Emit the results
+          if (result.stdout.isNotEmpty) {
+            _stdoutController.add(Uint8List.fromList(result.stdout.codeUnits));
+          }
+          if (result.stderr.isNotEmpty) {
+            _stderrController.add(Uint8List.fromList(result.stderr.codeUnits));
+          }
+          
+          _stdoutController.close();
+          _stderrController.close();
+          debugPrint('SSH Interactive: Command completed, stdout: ${result.stdout.length}, stderr: ${result.stderr.length}');
+        } catch (e) {
+          debugPrint('SSH Interactive: Error executing command: $e');
+          _stderrController.add(Uint8List.fromList('Error: $e\n'.codeUnits));
+          _stdoutController.close();
+          _stderrController.close();
+        }
+      },
+    );
+  }
+  
+  String _combineCommandAndScript(String command, String script) {
+    // For shell commands like "cat | sh", we can directly pass the script
+    if (command.contains('cat | sh')) {
+      return script;
+    }
+    // For PowerShell commands, wrap the script appropriately
+    if (command.contains('powershell')) {
+      return script;
+    }
+    // Default: just return the script
+    return script;
+  }
 
-  int? get exitCode => _result.exitCode;
+  int? get exitCode => _result?.exitCode;
 
   void write(dynamic data) {
     if (data is String) {

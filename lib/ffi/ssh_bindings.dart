@@ -7,11 +7,24 @@ import 'package:ffi/ffi.dart';
 /// Load the native library
 DynamicLibrary _loadLibrary() {
   if (Platform.isMacOS) {
-    return DynamicLibrary.open('rust_ssh/target/release/librust_ssh.dylib');
+    // First try debug build, then release build
+    try {
+      return DynamicLibrary.open('rust_ssh/target/debug/librust_ssh.dylib');
+    } catch (e) {
+      return DynamicLibrary.open('rust_ssh/target/release/librust_ssh.dylib');
+    }
   } else if (Platform.isLinux) {
-    return DynamicLibrary.open('rust_ssh/target/release/librust_ssh.so');
+    try {
+      return DynamicLibrary.open('rust_ssh/target/debug/librust_ssh.so');
+    } catch (e) {
+      return DynamicLibrary.open('rust_ssh/target/release/librust_ssh.so');
+    }
   } else if (Platform.isWindows) {
-    return DynamicLibrary.open('rust_ssh/target/release/rust_ssh.dll');
+    try {
+      return DynamicLibrary.open('rust_ssh/target/debug/rust_ssh.dll');
+    } catch (e) {
+      return DynamicLibrary.open('rust_ssh/target/release/rust_ssh.dll');
+    }
   } else if (Platform.isAndroid) {
     return DynamicLibrary.open('librust_ssh.so');
   } else if (Platform.isIOS) {
@@ -22,17 +35,19 @@ DynamicLibrary _loadLibrary() {
 
 final DynamicLibrary _lib = _loadLibrary();
 
-/// C SSH Configuration struct
+/// C SSH Configuration struct - must match Rust CSshConfig exactly
 final class CSshConfig extends Struct {
   external Pointer<Utf8> host;
   @Uint32()
   external int port;
   external Pointer<Utf8> username;
   external Pointer<Utf8> password;
-  external Pointer<Utf8> privateKey;
+  // ignore: non_constant_identifier_names
+  external Pointer<Utf8> private_key;  // Must match Rust field name
   external Pointer<Utf8> passphrase;
   @Uint32()
-  external int timeoutSecs;
+  // ignore: non_constant_identifier_names
+  external int timeout_secs;  // Must match Rust field name
 }
 
 /// C Command Result struct
@@ -190,6 +205,11 @@ class NativeSshBindings {
       .lookup<NativeFunction<Void Function(Pointer<CCommandResult>)>>('free_command_result')
       .asFunction();
 
+  /// Get last error message
+  static final Pointer<Utf8> Function() _getLastError = _lib
+      .lookup<NativeFunction<Pointer<Utf8> Function()>>('ssh_get_last_error')
+      .asFunction();
+
   /// Initialize library
   static int init() => _rustSshInit();
 
@@ -268,4 +288,16 @@ class NativeSshBindings {
 
   /// Free command result memory
   static void freeCommandResult(Pointer<CCommandResult> result) => _freeCommandResult(result);
+
+  /// Get last error message
+  static String? getLastError() {
+    final errorPtr = _getLastError();
+    if (errorPtr == nullptr) {
+      return null;
+    }
+    
+    final error = errorPtr.toDartString();
+    freeString(errorPtr);  // Free the error string
+    return error;
+  }
 }

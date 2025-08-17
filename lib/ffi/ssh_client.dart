@@ -109,9 +109,9 @@ class SshClient {
         ..port = config.port
         ..username = config.username.toNativeUtf8().cast()
         ..password = config.password?.toNativeUtf8().cast() ?? nullptr
-        ..privateKey = config.privateKey?.toNativeUtf8().cast() ?? nullptr
+        ..private_key = config.privateKey?.toNativeUtf8().cast() ?? nullptr
         ..passphrase = config.passphrase?.toNativeUtf8().cast() ?? nullptr
-        ..timeoutSecs = config.timeout.inSeconds;
+        ..timeout_secs = config.timeout.inSeconds;
 
       final sessionId = NativeSshBindings.connect(cConfig);
       if (sessionId == 0) {
@@ -124,7 +124,7 @@ class SshClient {
       if (cConfig.ref.host != nullptr) malloc.free(cConfig.ref.host);
       if (cConfig.ref.username != nullptr) malloc.free(cConfig.ref.username);
       if (cConfig.ref.password != nullptr) malloc.free(cConfig.ref.password);
-      if (cConfig.ref.privateKey != nullptr) malloc.free(cConfig.ref.privateKey);
+      if (cConfig.ref.private_key != nullptr) malloc.free(cConfig.ref.private_key);
       if (cConfig.ref.passphrase != nullptr) malloc.free(cConfig.ref.passphrase);
       malloc.free(cConfig);
     }

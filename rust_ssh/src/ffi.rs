@@ -42,10 +42,36 @@ pub struct CFileInfo {
 /// Parameters: transferred (u64), total (u64), user_data (*mut c_void)
 pub type CProgressCallback = extern "C" fn(u64, u64, *mut c_void);
 
+/// Global variable to store last error message
+static mut LAST_ERROR: Option<String> = None;
+
+/// Store error message for retrieval
+fn set_last_error(error: String) {
+    unsafe {
+        LAST_ERROR = Some(error);
+    }
+}
+
+/// Get last error message
+#[no_mangle]
+pub extern "C" fn ssh_get_last_error() -> *mut c_char {
+    unsafe {
+        if let Some(ref error) = LAST_ERROR {
+            match CString::new(error.clone()) {
+                Ok(c_string) => c_string.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            }
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+}
+
 /// Create SSH connection
 #[no_mangle]
 pub extern "C" fn ssh_connect(config: *const CSshConfig) -> u64 {
     if config.is_null() {
+        set_last_error("Config pointer is null".to_string());
         return 0;
     }
     
@@ -53,7 +79,10 @@ pub extern "C" fn ssh_connect(config: *const CSshConfig) -> u64 {
     
     let rust_config = match convert_c_config_to_rust(config) {
         Ok(config) => config,
-        Err(_) => return 0,
+        Err(e) => {
+            set_last_error(format!("Config conversion failed: {}", e));
+            return 0;
+        }
     };
     
     match SshClient::connect(rust_config) {
@@ -61,7 +90,10 @@ pub extern "C" fn ssh_connect(config: *const CSshConfig) -> u64 {
             let mut manager = SESSION_MANAGER.lock();
             manager.add_session(connection)
         }
-        Err(_) => 0,
+        Err(e) => {
+            set_last_error(format!("SSH connection failed: {}", e));
+            0
+        }
     }
 }
 
