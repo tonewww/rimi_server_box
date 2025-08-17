@@ -37,6 +37,7 @@ class AsyncSSHClient {
     final client = AsyncSSHClient();
     client._useAsync = useAsync;
     
+    // TODO: Re-enable async operations once isolate implementation is complete
     // Force use of sync client only - completely disable async for stability
     client._useAsync = false;
     debugPrint('SSH: Using sync-only mode for stability');
@@ -70,6 +71,7 @@ class AsyncSSHClient {
     final client = AsyncSSHClient();
     client._useAsync = useAsync;
     
+    // TODO: Re-enable async operations once isolate implementation is complete
     // Force use of sync client only - completely disable async for stability
     client._useAsync = false;
     debugPrint('SSH: Using sync-only mode for stability');
@@ -108,6 +110,7 @@ class AsyncSSHClient {
       }
     }
     
+    // TODO: Replace direct sync calls with proper isolate-based async implementation
     // Use direct sync call - worker isolate prevents main thread blocking
     final result = await _fallbackClient!.execute(command);
     return AsyncSSHResult.fromSync(result);
@@ -161,6 +164,7 @@ class AsyncSSHClient {
       throw StateError('SSH client not connected');
     }
     
+    // TODO: Replace direct sync calls with proper isolate-based async implementation
     // Use direct sync call - worker isolate prevents main thread blocking
     final sftpClient = rust_ssh.SftpClient(_fallbackClient!);
     await sftpClient.initialize();
@@ -173,6 +177,7 @@ class AsyncSSHClient {
       throw StateError('SSH client not connected');
     }
     
+    // TODO: Replace direct sync calls with proper isolate-based async implementation
     // Use direct sync call - worker isolate prevents main thread blocking
     await _fallbackClient!.forwardLocal(remoteHost, remotePort);
     return AsyncSSHForwardChannel(remoteHost, remotePort);
@@ -184,6 +189,7 @@ class AsyncSSHClient {
       throw StateError('SSH client not connected');
     }
     
+    // TODO: Replace direct sync calls with proper isolate-based async implementation
     // Use direct sync call - worker isolate prevents main thread blocking
     await _fallbackClient!.forwardRemote(remotePort, localHost, localPort);
   }
@@ -207,6 +213,7 @@ class AsyncSSHClient {
       throw StateError('SSH client not connected');
     }
     
+    // TODO: Replace direct sync calls with proper isolate-based async implementation
     // Use direct sync call - worker isolate prevents main thread blocking
     await _fallbackClient!.createShell();
     
@@ -359,6 +366,7 @@ class AsyncSftpClient {
   }
 
   Future<dynamic> open(String path, {dynamic mode}) async {
+    // TODO: Implement actual SFTP file operations via isolate
     debugPrint('SFTP open: $path');
     return AsyncSftpFile._(path);
   }
@@ -432,6 +440,7 @@ class AsyncSftpFile {
   AsyncSftpFile._(this._path);
   
   Future<dynamic> write(dynamic data, {void Function(int)? onProgress}) async {
+    // TODO: Implement actual SFTP write operations via isolate
     debugPrint('SFTP write to: $_path (onProgress: ${onProgress != null})');
     return AsyncSftpFileWriter._(data, onProgress);
   }

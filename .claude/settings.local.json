@@ -21,7 +21,9 @@
       "Bash(timeout 30 flutter run --no-sound-null-safety)",
       "Bash(timeout 60 flutter run)",
       "Bash(nm:*)",
-      "Bash(r)"
+      "Bash(r)",
+      "Bash(pkill:*)",
+      "Bash(lsof:*)"
     ],
     "deny": [],
     "ask": []
