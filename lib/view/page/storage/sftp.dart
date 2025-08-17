@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dartssh2/dartssh2.dart';
+import 'package:server_box/ffi/ssh_adapter_async.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
@@ -167,7 +167,7 @@ extension _UI on _SftpPageState {
   Widget _buildItem(SftpName file, {VoidCallback? beforeTap}) {
     final isDir = file.attr.isDirectory;
     final trailing = Text(
-      '${_getTime(file.attr.modifyTime)}\n${file.attr.mode?.str ?? ''}',
+      '${_getTime(file.attr.modifyTimeMillis)}\n${file.attr.mode?.str ?? ''}',
       style: UIs.textGrey,
       textAlign: TextAlign.right,
     );
@@ -810,7 +810,7 @@ enum _SortType {
         );
         break;
       case _SortType.time:
-        files.sort(comparator.thenCompareBy<num>((x) => x.attr.modifyTime ?? 0, reversed: reversed).compare);
+        files.sort(comparator.thenCompareBy<num>((x) => x.attr.modifyTimeMillis, reversed: reversed).compare);
         break;
       case _SortType.size:
         files.sort(comparator.thenCompareBy<num>((x) => x.attr.size ?? 0, reversed: reversed).compare);

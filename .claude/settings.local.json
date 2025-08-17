@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:pub.dev)",
+      "Bash(git add:*)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter:*)",
+      "Bash(dart run:*)",
+      "Bash(rm:*)",
+      "Bash(git commit:*)",
+      "Bash(security find-identity:*)",
+      "Bash(cargo init:*)",
+      "Bash(cargo:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(cp:*)",
+      "Bash(timeout 30 flutter run --no-sound-null-safety)",
+      "Bash(timeout 60 flutter run)",
+      "Bash(nm:*)",
+      "Bash(r)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,4 +1,4 @@
-import 'package:dartssh2/dartssh2.dart';
+import 'package:server_box/ffi/ssh_adapter_async.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
 import 'package:server_box/data/model/server/system.dart';
@@ -23,7 +23,7 @@ class SystemDetector {
 
     try {
       // Try to detect Windows systems first (more reliable detection)
-      final powershellResult = await client.run('ver 2>nul').string;
+      final powershellResult = (await client.run('ver 2>nul')).string;
       if (powershellResult.isNotEmpty &&
           (powershellResult.contains('Windows') || powershellResult.contains('NT'))) {
         detectedSystemType = SystemType.windows;
@@ -32,7 +32,7 @@ class SystemDetector {
       }
 
       // Try to detect Unix/Linux/BSD systems
-      final unixResult = await client.run('uname -a').string;
+      final unixResult = (await client.run('uname -a')).string;
       if (unixResult.contains('Linux')) {
         detectedSystemType = SystemType.linux;
         dprint('Detected Linux system type for ${spi.oldId}');

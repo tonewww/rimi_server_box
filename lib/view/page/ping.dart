@@ -146,7 +146,7 @@ class _PingPageState extends State<PingPage> with AutomaticKeepAliveClientMixin 
         if (e.client == null) {
           return;
         }
-        final result = await e.client!.run('ping -c 3 $target').string;
+        final result = (await e.client!.run('ping -c 3 $target')).string;
         _results.value.add(PingResult.parse(e.spi.name, result));
         // [ValueNotifier] only notify when value is changed
         // But we just add a element to list without changing the list itself

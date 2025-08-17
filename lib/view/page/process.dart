@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:dartssh2/dartssh2.dart';
+import 'package:server_box/ffi/ssh_adapter_async.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:server_box/core/extension/context/locale.dart';
@@ -59,9 +59,9 @@ class _ProcessPageState extends State<ProcessPage> {
   Future<void> _refresh() async {
     if (mounted) {
       final systemType = widget.args.spi.server?.value.status.system;
-      final result = await _client
-          ?.run(ShellFunc.process.exec(widget.args.spi.id, systemType: systemType))
-          .string;
+      final result = (await _client
+          ?.run(ShellFunc.process.exec(widget.args.spi.id, systemType: systemType)))
+          ?.string;
       if (result == null || result.isEmpty) {
         context.showSnackBar(libL10n.empty);
         return;

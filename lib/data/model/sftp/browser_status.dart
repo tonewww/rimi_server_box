@@ -1,4 +1,4 @@
-import 'package:dartssh2/dartssh2.dart';
+import 'package:server_box/ffi/ssh_adapter_async.dart';
 import 'package:fl_lib/fl_lib.dart';
 
 /// Remote server only can be linux-like system, so use '/' as seperator

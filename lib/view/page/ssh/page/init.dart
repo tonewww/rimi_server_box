@@ -34,7 +34,7 @@ extension _Init on SSHPageState {
       onStatus: (p0) {
         _writeLn(p0.toString());
       },
-      onKeyboardInteractive: (_) => KeybordInteractive.defaultHandle(widget.args.spi, ctx: context),
+      // onKeyboardInteractive: (_) => KeybordInteractive.defaultHandle(widget.args.spi, ctx: context), // TODO: Implement keyboard interactive
     );
 
     _writeLn('${libL10n.execute}: Shell');

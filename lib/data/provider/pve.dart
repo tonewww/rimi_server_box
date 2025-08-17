@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:computer/computer.dart';
-import 'package:dartssh2/dartssh2.dart';
+import 'package:server_box/ffi/ssh_adapter_async.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:fl_lib/fl_lib.dart';

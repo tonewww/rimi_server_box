@@ -1,4 +1,4 @@
-import 'package:dartssh2/dartssh2.dart';
+import 'package:server_box/ffi/ssh_adapter_async.dart';
 import 'package:server_box/view/widget/unix_perm.dart';
 
 extension SftpFileX on SftpFileMode {

@@ -36,7 +36,7 @@ dependencies:
   wake_on_lan: ^4.1.1+3
   webdav_client_plus: ^1.0.2
   xml: ^6.4.2 # for parsing nvidia-smi
-  dartssh2: ^2.13.0
+  # dartssh2: ^2.13.0  # Replaced with Rust SSH implementation via FFI
   circle_chart:
     git:
       url: https://github.com/lollipopkit/circle_chart

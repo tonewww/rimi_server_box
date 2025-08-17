@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:dartssh2/dartssh2.dart';
+import 'package:server_box/ffi/ssh_adapter_async.dart';
 import 'package:easy_isolate/easy_isolate.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/core/utils/server.dart';
@@ -94,12 +94,12 @@ Future<void> _download(SftpReq req, SendPort mainSendPort, SendErrorFunction sen
       final chunkSize = remaining > defaultChunkSize ? defaultChunkSize : remaining;
       dprint('Size: $size, Total Read: $totalRead, Chunk Size: $chunkSize');
 
-      final fileData = file.read(offset: totalRead, length: chunkSize);
-      await for (var chunk in fileData) {
-        localFile.add(chunk);
-        totalRead += chunk.length;
-        mainSendPort.send(totalRead / size * 100);
-      }
+      final chunk = await file.read(offset: totalRead, length: chunkSize);
+      if (chunk.isEmpty) break;
+      
+      localFile.add(chunk);
+      totalRead += chunk.length as int;
+      mainSendPort.send(totalRead / size * 100);
     }
 
     await localFile.close();
@@ -139,7 +139,7 @@ Future<void> _upload(SftpReq req, SendPort mainSendPort, SendErrorFunction sendE
       req.remotePath,
       mode: SftpFileOpenMode.truncate | SftpFileOpenMode.create | SftpFileOpenMode.write,
     );
-    final writer = file.write(
+    final writer = await file.write(
       localFile,
       onProgress: (total) {
         mainSendPort.send(total / localLen * 100);

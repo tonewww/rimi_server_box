@@ -23,7 +23,9 @@ extension _Actions on _ServerPageState {
     if (srv.conn == ServerConn.finished) {
       final id = srv.spi.id;
       final cardStatus = _getCardNoti(id);
-      cardStatus.value = cardStatus.value.copyWith(flip: !cardStatus.value.flip);
+      cardStatus.value = cardStatus.value.copyWith(
+        flip: !cardStatus.value.flip,
+      );
     } else {
       ServerEditPage.route.go(context, args: SpiRequiredArgs(srv.spi));
     }
@@ -46,7 +48,10 @@ extension _Operation on _ServerPageState {
     _askFor(
       func: () async {
         if (Stores.setting.showSuspendTip.fetch()) {
-          await context.showRoundDialog(title: libL10n.attention, child: Text(l10n.suspendTip));
+          await context.showRoundDialog(
+            title: libL10n.attention,
+            child: Text(l10n.suspendTip),
+          );
           Stores.setting.showSuspendTip.put(false);
         }
         srv.client?.execWithPwd(
@@ -118,7 +123,11 @@ extension _Utils on _ServerPageState {
     return _ServerPageState._kCardHeightNormal;
   }
 
-  void _askFor({required void Function() func, required String typ, required String name}) {
+  void _askFor({
+    required void Function() func,
+    required String typ,
+    required String name,
+  }) {
     context.showRoundDialog(
       title: libL10n.attention,
       child: Text(libL10n.askContinue('$typ ${l10n.server}($name)')),
@@ -199,7 +208,10 @@ extension _ServerX on Server {
         }();
         final upTime = status.more[StatusCmdType.uptime];
         final items = [
-          cmdTemp ?? (temperatureVal != null ? '${temperatureVal.toStringAsFixed(1)}°C' : null),
+          cmdTemp ??
+              (temperatureVal != null
+                  ? '${temperatureVal.toStringAsFixed(1)}°C'
+                  : null),
           upTime,
         ];
         final str = items.where((e) => e != null && e.isNotEmpty).join(' | ');
@@ -214,5 +226,6 @@ extension _ServerX on Server {
       case ServerConn.failed:
         return libL10n.fail;
     }
+    return null;
   }
 }

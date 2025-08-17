@@ -36,7 +36,11 @@ class WindowsParser {
   static String? parseUpTime(String raw) {
     try {
       // Clean the input - trim whitespace and get the first non-empty line
-      final cleanedInput = raw.trim().split('\n').where((line) => line.trim().isNotEmpty).firstOrNull;
+      final cleanedInput = raw
+          .trim()
+          .split('\n')
+          .where((line) => line.trim().isNotEmpty)
+          .firstOrNull;
 
       if (cleanedInput == null || cleanedInput.isEmpty) {
         Loggers.app.warning('Windows uptime parsing: empty or null input');
@@ -46,23 +50,37 @@ class WindowsParser {
       // Try multiple date formats to handle different Windows locale/version outputs
       final formatters = [
         DateFormat('EEEE, MMMM d, yyyy h:mm:ss a', 'en_US'), // Original format
-        DateFormat('EEEE, MMMM dd, yyyy h:mm:ss a', 'en_US'), // Double-digit day
+        DateFormat(
+          'EEEE, MMMM dd, yyyy h:mm:ss a',
+          'en_US',
+        ), // Double-digit day
         DateFormat('EEE, MMM d, yyyy h:mm:ss a', 'en_US'), // Shortened format
-        DateFormat('EEE, MMM dd, yyyy h:mm:ss a', 'en_US'), // Shortened with double-digit day
+        DateFormat(
+          'EEE, MMM dd, yyyy h:mm:ss a',
+          'en_US',
+        ), // Shortened with double-digit day
         DateFormat('M/d/yyyy h:mm:ss a', 'en_US'), // Short US format
-        DateFormat('MM/dd/yyyy h:mm:ss a', 'en_US'), // Short US format with zero padding
+        DateFormat(
+          'MM/dd/yyyy h:mm:ss a',
+          'en_US',
+        ), // Short US format with zero padding
         DateFormat('d/M/yyyy h:mm:ss a', 'en_US'), // Short European format
-        DateFormat('dd/MM/yyyy h:mm:ss a', 'en_US'), // Short European format with zero padding
+        DateFormat(
+          'dd/MM/yyyy h:mm:ss a',
+          'en_US',
+        ), // Short European format with zero padding
       ];
 
       DateTime? dateTime;
       for (final formatter in formatters) {
         dateTime = formatter.tryParseLoose(cleanedInput);
-        if (dateTime != null) break;
+        break;
       }
 
       if (dateTime == null) {
-        Loggers.app.warning('Windows uptime parsing: could not parse date format for: $cleanedInput');
+        Loggers.app.warning(
+          'Windows uptime parsing: could not parse date format for: $cleanedInput',
+        );
         return null;
       }
 
@@ -88,7 +106,10 @@ class WindowsParser {
         return '$hours:${minutes.toString().padLeft(2, '0')}';
       }
     } catch (e, s) {
-      Loggers.app.warning('Windows uptime parsing failed: $e for input: $raw', s);
+      Loggers.app.warning(
+        'Windows uptime parsing failed: $e for input: $raw',
+        s,
+      );
       return null;
     }
   }
@@ -201,13 +222,19 @@ class WindowsParser {
 
       for (final diskData in diskList) {
         final deviceId = diskData['DeviceID']?.toString() ?? '';
-        final size = BigInt.tryParse(diskData['Size']?.toString() ?? '0') ?? BigInt.zero;
-        final freeSpace = BigInt.tryParse(diskData['FreeSpace']?.toString() ?? '0') ?? BigInt.zero;
+        final size =
+            BigInt.tryParse(diskData['Size']?.toString() ?? '0') ?? BigInt.zero;
+        final freeSpace =
+            BigInt.tryParse(diskData['FreeSpace']?.toString() ?? '0') ??
+            BigInt.zero;
         final fileSystem = diskData['FileSystem']?.toString() ?? '';
 
         // Validate all required fields
         final hasRequiredFields =
-            deviceId.isNotEmpty && size != BigInt.zero && freeSpace != BigInt.zero && fileSystem.isNotEmpty;
+            deviceId.isNotEmpty &&
+            size != BigInt.zero &&
+            freeSpace != BigInt.zero &&
+            fileSystem.isNotEmpty;
 
         if (!hasRequiredFields) {
           Loggers.app.warning(
