@@ -135,13 +135,16 @@ class AsyncSshClientGenerator {
       }
 
       // TODO: Return actual SSH client once isolate implementation is complete
-      // For now, return a mock client that represents the connection
-      return MockSSHClient(
+      // For now, return a compatible mock client wrapped as IsolateSSHClient
+      final mockClient = MockSSHClient(
         id: result.clientId!,
         host: spi.ip,
         port: spi.port,
         connected: true,
       );
+      
+      // Return a wrapper that acts like IsolateSSHClient
+      return MockIsolateSSHClient(mockClient);
     } catch (e) {
       debugPrint('AsyncSshClientGenerator: Failed to connect to ${spi.ip}: $e');
       rethrow;
@@ -246,5 +249,54 @@ class MockSftpFile {
   Future<dynamic> write(dynamic data, {void Function(int)? onProgress}) async {}
   Future<List<int>> read({int? offset, int? length}) async => [];
   Future<dynamic> stat() async => {};
+  Future<void> close() async {}
+}
+
+/// Wrapper to make MockSSHClient compatible with IsolateSSHClient interface
+class MockIsolateSSHClient {
+  final MockSSHClient _mockClient;
+  
+  MockIsolateSSHClient(this._mockClient);
+  
+  // Delegate all calls to the underlying mock client
+  bool get isConnected => _mockClient.isConnected;
+  bool get isClosed => _mockClient.isClosed;
+  
+  Future<void> close() => _mockClient.close();
+  Future<MockSSHResult> execute(String command) => _mockClient.execute(command);
+  Future<MockSSHResult> run(String command) => _mockClient.run(command);
+  Future<dynamic> shell({dynamic pty, Map<String, String>? environment}) => _mockClient.shell(pty: pty, environment: environment);
+  Future<dynamic> sftp() => _mockClient.sftp();
+  
+  // Additional methods that might be needed
+  Future<int?> execWithPwd(
+    String script, {
+    String? entry,
+    dynamic context,
+    dynamic onStdout,
+    dynamic onStderr,
+    required String id,
+  }) async {
+    final result = await run(script);
+    return result.exitCode;
+  }
+  
+  Future<dynamic> forwardLocal(String remoteHost, int remotePort, [String? localHost, int? localPort]) async {
+    return MockSSHForwardChannel();
+  }
+  
+  Future<void> forwardRemote(int remotePort, String localHost, int localPort) async {
+    // Mock implementation
+  }
+  
+  Future<void> ping() async {
+    if (!isConnected) throw StateError('SSH client not connected');
+    await run('echo ping');
+  }
+}
+
+class MockSSHForwardChannel {
+  Stream<dynamic> get stream => Stream.empty();
+  StreamSink<List<int>> get sink => StreamController<List<int>>().sink;
   Future<void> close() async {}
 }
