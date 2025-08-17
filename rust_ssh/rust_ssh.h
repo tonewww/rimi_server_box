@@ -60,6 +60,11 @@ int32_t rust_ssh_init(void);
 int32_t rust_ssh_cleanup(void);
 
 /**
+ * Get last error message
+ */
+char *ssh_get_last_error(void);
+
+/**
  * Create SSH connection
  */
 uint64_t ssh_connect(const struct CSshConfig *config);
