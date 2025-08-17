@@ -2,7 +2,7 @@
 // This tests that the async SSH client can be created and performs basic operations
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:server_box/ffi/ssh_adapter_async.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 void main() {
   group('Async SSH Tests', () {

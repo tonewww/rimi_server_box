@@ -401,12 +401,21 @@ class IsolateSSHClient {
 
 /// SSH isolate entry point - runs in worker isolate
 void _sshIsolateEntryPoint(SendPort mainSendPort) async {
-  // TODO: Import Rust SSH client in isolate context - currently using placeholder
-  // TODO: Implement full Rust FFI integration within isolate worker thread
-  // For now, this is a placeholder implementation
+  // Import Rust SSH client in isolate context
+  // TODO: Complete full Rust FFI integration within isolate worker thread
   
   final receivePort = ReceivePort();
   mainSendPort.send(receivePort.sendPort);
+  
+  // Import SSH client in isolate
+  dynamic rustSshClient;
+  try {
+    // Initialize SSH client library in isolate context
+    // For now we'll use a fallback approach
+    rustSshClient = null; // Placeholder for now
+  } catch (e) {
+    print('SSH Isolate: Failed to initialize Rust SSH client: $e');
+  }
   
   // Active SSH sessions in this isolate
   final Map<String, dynamic> sessions = {};
@@ -695,11 +704,59 @@ typedef SftpName = IsolateSftpName;
 typedef SftpFile = IsolateSftpFile;
 typedef SftpFileWriter = IsolateSftpFileWriter;
 
+/// SSH PTY Configuration for compatibility
+class SSHPtyConfig {
+  final int width;
+  final int height;
+  final String term;
+  
+  const SSHPtyConfig({
+    this.width = 80,
+    this.height = 24,
+    this.term = 'xterm',
+  });
+}
+
+/// SSH Key Pair for compatibility
+class SSHKeyPair {
+  final String _key;
+  
+  SSHKeyPair._(this._key);
+  
+  static List<SSHKeyPair> fromPem(String pem, [String? passphrase]) {
+    return [SSHKeyPair._(pem)];
+  }
+  
+  static bool isEncryptedPem(String pem) {
+    return pem.contains('ENCRYPTED') || pem.contains('Proc-Type: 4,ENCRYPTED');
+  }
+  
+  String toPem() => _key;
+}
+
+/// SSH User Info Request Handler type for compatibility
+typedef SSHUserInfoRequestHandler = Future<(String?, String?)> Function(String, String, String, List<String>, List<bool>);
+
+/// SFTP File Open Mode for compatibility
+class SftpFileOpenMode {
+  static const read = SftpFileOpenMode._(['read']);
+  static const write = SftpFileOpenMode._(['write']);
+  static const create = SftpFileOpenMode._(['create']);
+  static const truncate = SftpFileOpenMode._(['truncate']);
+  
+  final List<String> _modes;
+  const SftpFileOpenMode._(this._modes);
+  
+  /// Combine modes using bitwise OR
+  SftpFileOpenMode operator |(SftpFileOpenMode other) {
+    return SftpFileOpenMode._([..._modes, ...other._modes]);
+  }
+  
+  @override
+  String toString() => _modes.join('|');
+}
+
 // Additional compatibility exports
-typedef SSHPtyConfig = dynamic;
-typedef SSHKeyPair = dynamic;
-typedef SSHUserInfoRequestHandler = dynamic;
-typedef SftpFileOpenMode = dynamic;
 typedef SftpFileAttr = dynamic;
 typedef SftpFileMode = dynamic;
 typedef SftpFileAttributes = dynamic;

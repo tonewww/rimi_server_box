@@ -1,4 +1,4 @@
-import 'package:server_box/ffi/ssh_adapter_async.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
 import 'package:server_box/data/model/server/system.dart';

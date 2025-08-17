@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:server_box/ffi/ssh_adapter_async.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/foundation.dart';
 import 'package:server_box/data/model/app/error.dart';

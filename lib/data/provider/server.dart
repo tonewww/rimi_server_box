@@ -8,6 +8,7 @@ import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/core/extension/ssh_client.dart';
 import 'package:server_box/core/sync.dart';
 import 'package:server_box/core/utils/server.dart';
+import 'package:server_box/core/utils/server_async.dart';
 import 'package:server_box/core/utils/ssh_auth.dart';
 import 'package:server_box/data/helper/system_detector.dart';
 import 'package:server_box/data/model/app/error.dart';
@@ -337,10 +338,10 @@ class ServerProvider extends Provider {
 
       try {
         final time1 = DateTime.now();
-        sv.client = await genClient(
+        // Use async isolate-based connection to prevent UI blocking
+        sv.client = await AsyncSshClientGenerator.genClientAsync(
           spi,
           timeout: Duration(seconds: Stores.setting.timeout.fetch()),
-          // onKeyboardInteractive: (_) => KeybordInteractive.defaultHandle(spi), // TODO: Implement keyboard interactive
         );
         final time2 = DateTime.now();
         final spentTime = time2.difference(time1).inMilliseconds;
