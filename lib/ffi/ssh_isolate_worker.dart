@@ -22,54 +22,51 @@ class SshIsolateCommand {
 class SshIsolateManager {
   static SshIsolateManager? _instance;
   static SshIsolateManager get instance => _instance ??= SshIsolateManager._();
-  
+
   SshIsolateManager._();
 
   Isolate? _isolate;
   SendPort? _sendPort;
   final Completer<void> _readyCompleter = Completer<void>();
-  
+
   /// Initialize the SSH isolate worker
   Future<void> initialize() async {
     if (_isolate != null) return;
-    
+
     final receivePort = ReceivePort();
-    
-    _isolate = await Isolate.spawn(
-      _sshIsolateEntryPoint,
-      receivePort.sendPort,
-    );
-    
+
+    _isolate = await Isolate.spawn(_sshIsolateEntryPoint, receivePort.sendPort);
+
     // Wait for the isolate to send back its SendPort
     final sendPort = await receivePort.first as SendPort;
     _sendPort = sendPort;
     _readyCompleter.complete();
-    
+
     print('SSH Isolate Worker initialized');
   }
-  
+
   /// Execute SSH command in isolate
   Future<Map<String, dynamic>> executeCommand(
     String type,
     Map<String, dynamic> data,
   ) async {
     await _readyCompleter.future;
-    
+
     final responsePort = ReceivePort();
     final command = SshIsolateCommand(
       type: type,
       data: data,
       responsePort: responsePort.sendPort,
     );
-    
+
     _sendPort!.send(command);
-    
+
     final result = await responsePort.first as Map<String, dynamic>;
     responsePort.close();
-    
+
     return result;
   }
-  
+
   /// Dispose the isolate
   void dispose() {
     _isolate?.kill();
@@ -81,26 +78,20 @@ class SshIsolateManager {
 /// Entry point for SSH isolate
 void _sshIsolateEntryPoint(SendPort mainSendPort) async {
   final receivePort = ReceivePort();
-  
+
   // Send back our SendPort to main isolate
   mainSendPort.send(receivePort.sendPort);
-  
+
   // Map to store SSH clients by ID
   final Map<String, rust_ssh.SshClient> clients = {};
-  
+
   await for (final message in receivePort) {
     if (message is SshIsolateCommand) {
       try {
         final result = await _handleCommand(message, clients);
-        message.responsePort.send({
-          'success': true,
-          'data': result,
-        });
+        message.responsePort.send({'success': true, 'data': result});
       } catch (e) {
-        message.responsePort.send({
-          'success': false,
-          'error': e.toString(),
-        });
+        message.responsePort.send({'success': false, 'error': e.toString()});
       }
     }
   }
@@ -138,17 +129,14 @@ Future<Map<String, dynamic>> _handleConnect(
     passphrase: data['passphrase'],
     timeout: Duration(seconds: data['timeoutSecs'] ?? 30),
   );
-  
+
   final client = rust_ssh.SshClient();
   await client.connect(config);
-  
+
   final clientId = data['clientId'] as String;
   clients[clientId] = client;
-  
-  return {
-    'clientId': clientId,
-    'connected': true,
-  };
+
+  return {'clientId': clientId, 'connected': true};
 }
 
 Future<Map<String, dynamic>> _handleExecute(
@@ -157,14 +145,14 @@ Future<Map<String, dynamic>> _handleExecute(
 ) async {
   final clientId = data['clientId'] as String;
   final command = data['command'] as String;
-  
+
   final client = clients[clientId];
   if (client == null) {
     throw Exception('Client not found: $clientId');
   }
-  
+
   final result = await client.execute(command);
-  
+
   return {
     'stdout': result.stdout,
     'stderr': result.stderr,
@@ -177,17 +165,15 @@ Future<Map<String, dynamic>> _handleCreateShell(
   Map<String, rust_ssh.SshClient> clients,
 ) async {
   final clientId = data['clientId'] as String;
-  
+
   final client = clients[clientId];
   if (client == null) {
     throw Exception('Client not found: $clientId');
   }
-  
+
   await client.createShell();
-  
-  return {
-    'shellCreated': true,
-  };
+
+  return {'shellCreated': true};
 }
 
 Future<Map<String, dynamic>> _handleDisconnect(
@@ -195,13 +181,11 @@ Future<Map<String, dynamic>> _handleDisconnect(
   Map<String, rust_ssh.SshClient> clients,
 ) async {
   final clientId = data['clientId'] as String;
-  
+
   final client = clients.remove(clientId);
   if (client != null) {
-    client.close();
+    await client.disconnect();
   }
-  
-  return {
-    'disconnected': true,
-  };
+
+  return {'disconnected': true};
 }

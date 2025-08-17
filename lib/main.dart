@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:computer/computer.dart';
 import 'package:fl_lib/fl_lib.dart';
@@ -63,7 +64,35 @@ Future<void> _initData() async {
   Hive.registerAdapters();
 
   await PrefStore.shared.init(); // Call this before accessing any store
-  await Stores.init();
+  
+  try {
+    await Stores.init();
+  } catch (e) {
+    print('Store initialization failed: $e');
+    
+    // Check if it's a keychain/secure storage error
+    if (e.toString().contains('-34018') || 
+        e.toString().contains('authorization') ||
+        e.toString().contains('entitlement') ||
+        e.toString().contains('keychain')) {
+      print('Keychain/secure storage error detected.');
+      print('This is likely due to macOS entitlement issues or missing code signing.');
+      print('To fix this issue:');
+      print('1. Add proper keychain entitlements to macos/Runner/DebugProfile.entitlements');
+      print('2. Configure code signing in Xcode project settings');
+      print('3. Or run on a device with proper provisioning profile');
+      print('');
+      print('For SSH functionality testing, you can try:');
+      print('- Running tests instead: flutter test');
+      print('- Using a different platform (iOS/Android) if available');
+      print('- Configuring proper macOS development team and signing');
+      
+      // For now, we'll terminate gracefully rather than crash
+      exit(1);
+    } else {
+      rethrow;
+    }
+  }
 
   // It may effect the following logic, so await it.
   // DO DB migration before load any provider.

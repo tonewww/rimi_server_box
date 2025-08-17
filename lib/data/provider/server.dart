@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 // import 'dart:io';
 
@@ -336,8 +337,19 @@ class ServerProvider extends Provider {
         }
       }
 
+      // Add SSH session to TermSessionManager before connection attempt
+      final sessionId = 'ssh_${spi.id}';
+      final time1 = DateTime.now();
+      TermSessionManager.add(
+        id: sessionId,
+        spi: spi,
+        startTimeMs: time1.millisecondsSinceEpoch,
+        disconnect: () => _closeOneServer(spi.id),
+        status: TermSessionStatus.connecting,
+      );
+      TermSessionManager.setActive(sessionId, hasTerminal: false);
+
       try {
-        final time1 = DateTime.now();
         // Use async isolate-based connection to prevent UI blocking
         sv.client = await AsyncSshClientGenerator.genClientAsync(
           spi,
@@ -351,35 +363,21 @@ class ServerProvider extends Provider {
           Loggers.app.info('Jump to ${spi.name} in $spentTime ms.');
         }
 
-        // Add SSH session to TermSessionManager
-        final sessionId = 'ssh_${spi.id}';
-        TermSessionManager.add(
-          id: sessionId,
-          spi: spi,
-          startTimeMs: time1.millisecondsSinceEpoch,
-          disconnect: () => _closeOneServer(spi.id),
-          status: TermSessionStatus.connecting,
-        );
-        TermSessionManager.setActive(sessionId, hasTerminal: false);
+        // Set server connection state and update session status to connected
+        _setServerState(s, ServerConn.connected);
+        TermSessionManager.updateStatus(sessionId, TermSessionStatus.connected);
       } catch (e) {
         TryLimiter.inc(sid);
         sv.status.err = SSHErr(type: SSHErrType.connect, message: e.toString());
         _setServerState(s, ServerConn.failed);
 
         // Remove SSH session on connection failure
-        final sessionId = 'ssh_${spi.id}';
         TermSessionManager.remove(sessionId);
 
         /// In order to keep privacy, print [spi.name] instead of [spi.id]
         Loggers.app.warning('Connect to ${spi.name} failed', e);
         return;
       }
-
-      _setServerState(s, ServerConn.connected);
-
-      // Update SSH session status to connected
-      final sessionId = 'ssh_${spi.id}';
-      TermSessionManager.updateStatus(sessionId, TermSessionStatus.connected);
 
       try {
         // Detect system type using helper
@@ -388,11 +386,12 @@ class ServerProvider extends Provider {
 
         final (_, writeScriptResult) = await sv.client!.exec(
           (session) async {
-            final scriptRaw = ShellFuncManager.allScript(
+            final scriptContent = ShellFuncManager.allScript(
               spi.custom?.cmds,
               systemType: detectedSystemType,
               disabledCmdTypes: spi.disabledCmdTypes,
-            ).uint8List;
+            );
+            final scriptRaw = Uint8List.fromList(scriptContent.codeUnits);
             session.stdin.add(scriptRaw);
             session.stdin.close();
           },

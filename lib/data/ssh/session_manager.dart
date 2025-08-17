@@ -49,6 +49,11 @@ abstract final class TermSessionManager {
   static Timer? _updateTimer; // Timer for iOS Live Activity updates
   static const _updateInterval = Duration(seconds: 5); // 5-second update interval
 
+  // Getter for testing purposes - returns entry info only
+  @visibleForTesting
+  static Map<String, TermSessionInfo> get entries => 
+    Map.fromEntries(_entries.entries.map((e) => MapEntry(e.key, e.value.info)));
+
   static void init() {
     if (isAndroid) {
       MethodChans.registerHandler((id) async {
@@ -80,6 +85,12 @@ abstract final class TermSessionManager {
   static void updateStatus(String id, TermSessionStatus status) {
     final old = _entries[id];
     if (old == null) return;
+    
+    // Log status changes for debugging
+    if (old.info.status != status) {
+      debugPrint('SSH Session $id: Status changed from ${old.info.status} to $status');
+    }
+    
     _entries[id] = _Entry(
       TermSessionInfo(
         id: old.info.id,

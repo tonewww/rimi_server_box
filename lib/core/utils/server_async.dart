@@ -16,22 +16,44 @@ class AsyncSshClientGenerator {
   }) async {
 
     try {
-      // Connect directly using IsolateSSHClient for proper session management
-      // This ensures all SSH operations go through the same isolate system
-      final isolateClient = await IsolateSSHClient.connect(
-        host: spi.ip,
-        port: spi.port,
-        username: spi.user,
-        password: spi.pwd ?? '',
-        timeout: timeout,
-      );
+      final IsolateSSHClient isolateClient;
       
-      debugPrint('AsyncSshClientGenerator: Successfully connected to ${spi.ip}:${spi.port} via IsolateSSHClient');
+      // Check if using key authentication
+      if (spi.keyId != null) {
+        // TODO: Get private key from stores when available
+        final privateKey = await _getPrivateKey(spi.keyId!);
+        isolateClient = await IsolateSSHClient.connectWithKey(
+          host: spi.ip,
+          port: spi.port,
+          username: spi.user,
+          privateKey: privateKey,
+          timeout: timeout,
+        );
+        debugPrint('AsyncSshClientGenerator: Successfully connected to ${spi.ip}:${spi.port} via key authentication');
+      } else {
+        // Password authentication
+        isolateClient = await IsolateSSHClient.connect(
+          host: spi.ip,
+          port: spi.port,
+          username: spi.user,
+          password: spi.pwd ?? '',
+          timeout: timeout,
+        );
+        debugPrint('AsyncSshClientGenerator: Successfully connected to ${spi.ip}:${spi.port} via password authentication');
+      }
+      
       return isolateClient;
     } catch (e) {
       debugPrint('AsyncSshClientGenerator: Failed to connect to ${spi.ip}: $e');
       rethrow;
     }
+  }
+  
+  /// Get private key from key store (placeholder for now)
+  static Future<String> _getPrivateKey(String keyId) async {
+    // TODO: Implement actual key retrieval from Stores.key.fetchOne(keyId)
+    // For now, return a placeholder - this should be implemented when stores are available
+    throw UnsupportedError('Key authentication not yet implemented in AsyncSshClientGenerator');
   }
 }
 

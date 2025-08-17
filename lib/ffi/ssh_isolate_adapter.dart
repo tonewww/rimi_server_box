@@ -174,10 +174,13 @@ class IsolateSSHClient {
     required String username,
     required String password,
     Duration timeout = const Duration(seconds: 30),
+    void Function(String status)? onStatusChange,
   }) async {
     await initialize();
     
     final client = IsolateSSHClient();
+    
+    onStatusChange?.call('Connecting to $host:$port...');
     
     final response = await client._sendRequest(
       SshIsolateMessageType.connect,
@@ -191,11 +194,13 @@ class IsolateSSHClient {
     );
 
     if (!response.success) {
+      onStatusChange?.call('Connection failed: ${response.error}');
       throw Exception(response.error ?? 'SSH connection failed');
     }
 
     client._connected = true;
     client._sessionId = response.result as String?;
+    onStatusChange?.call('Connected successfully to $host:$port');
     debugPrint('SSH: Connected via isolate to $host:$port');
     
     return client;
@@ -209,10 +214,13 @@ class IsolateSSHClient {
     required String privateKey,
     String? passphrase,
     Duration timeout = const Duration(seconds: 30),
+    void Function(String status)? onStatusChange,
   }) async {
     await initialize();
     
     final client = IsolateSSHClient();
+    
+    onStatusChange?.call('Connecting to $host:$port with key authentication...');
     
     final response = await client._sendRequest(
       SshIsolateMessageType.connectWithKey,
@@ -227,11 +235,13 @@ class IsolateSSHClient {
     );
 
     if (!response.success) {
+      onStatusChange?.call('Key authentication failed: ${response.error}');
       throw Exception(response.error ?? 'SSH key-based connection failed');
     }
 
     client._connected = true;
     client._sessionId = response.result as String?;
+    onStatusChange?.call('Connected successfully with key to $host:$port');
     debugPrint('SSH: Connected via isolate with key to $host:$port');
     
     return client;
