@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:server_box/ffi/ssh_client.dart' as rust_ssh;
 
 /// Message types for isolate communication
 enum SshIsolateMessageType {
@@ -58,6 +59,17 @@ class IsolateSSHClient {
   
   bool _connected = false;
   String? _sessionId;
+  
+  /// Get the session ID (for debugging and session management)
+  String? get sessionId => _sessionId;
+
+  /// Default constructor
+  IsolateSSHClient();
+  
+  /// Named constructor to create a connected IsolateSSHClient
+  IsolateSSHClient.connected(String sessionId) 
+    : _sessionId = sessionId,
+      _connected = true;
 
   /// Initialize the SSH isolate (call once per app lifecycle)
   static Future<void> initialize() async {
@@ -399,26 +411,36 @@ class IsolateSSHClient {
   bool get isClosed => !_connected;
 }
 
+/// Initialize Rust SSH client in isolate context
+Future<bool> _initializeRustSshInIsolate() async {
+  try {
+    // Initialize the Rust SSH library in isolate context
+    rust_ssh.SshClient.initialize();
+    return true;
+  } catch (e) {
+    debugPrint('Failed to initialize Rust SSH in isolate: $e');
+    return false;
+  }
+}
+
 /// SSH isolate entry point - runs in worker isolate
 void _sshIsolateEntryPoint(SendPort mainSendPort) async {
   // Import Rust SSH client in isolate context
-  // TODO: Complete full Rust FFI integration within isolate worker thread
-  
   final receivePort = ReceivePort();
   mainSendPort.send(receivePort.sendPort);
   
-  // Import SSH client in isolate
-  dynamic rustSshClient;
+  // Import and initialize SSH client in isolate
   try {
-    // Initialize SSH client library in isolate context
-    // For now we'll use a fallback approach
-    rustSshClient = null; // Placeholder for now
+    // Import the Rust SSH client directly in isolate
+    // This must be done in the isolate context for FFI to work correctly
+    final rustSsh = await _initializeRustSshInIsolate();
+    debugPrint('SSH Isolate: Successfully initialized Rust SSH client');
   } catch (e) {
-    print('SSH Isolate: Failed to initialize Rust SSH client: $e');
+    debugPrint('SSH Isolate: Failed to initialize Rust SSH client: $e');
   }
   
-  // Active SSH sessions in this isolate
-  final Map<String, dynamic> sessions = {};
+  // Active SSH sessions in this isolate - now using real Rust SSH clients
+  final Map<String, rust_ssh.SshClient> sessions = {};
   
   await for (final message in receivePort) {
     if (message is SshIsolateRequest) {
@@ -426,6 +448,7 @@ void _sshIsolateEntryPoint(SendPort mainSendPort) async {
         final response = await _handleSshRequest(message, sessions);
         mainSendPort.send(response);
       } catch (e) {
+        debugPrint('SSH Isolate error: $e');
         mainSendPort.send(SshIsolateResponse(
           requestId: message.requestId,
           success: false,
@@ -436,82 +459,172 @@ void _sshIsolateEntryPoint(SendPort mainSendPort) async {
   }
 }
 
-/// Handle SSH request in worker isolate
+/// Handle SSH request in worker isolate using real Rust SSH client
 Future<SshIsolateResponse> _handleSshRequest(
   SshIsolateRequest request,
-  Map<String, dynamic> sessions,
+  Map<String, rust_ssh.SshClient> sessions,
 ) async {
-  // TODO: Replace placeholder implementation with actual Rust SSH client integration
-  // TODO: Implement proper error handling for real SSH operations in isolate
-  // TODO: Add session state management and connection pooling for isolate
-  // This is currently a placeholder implementation
-  
-  switch (request.type) {
-    case SshIsolateMessageType.connect:
-      await Future.delayed(const Duration(milliseconds: 100)); // Simulate connection
-      final sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
-      sessions[sessionId] = {'connected': true, 'type': 'password'};
-      return SshIsolateResponse(
-        requestId: request.requestId,
-        success: true,
-        result: sessionId,
-      );
-      
-    case SshIsolateMessageType.connectWithKey:
-      await Future.delayed(const Duration(milliseconds: 100)); // Simulate connection
-      final sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
-      sessions[sessionId] = {'connected': true, 'type': 'key'};
-      return SshIsolateResponse(
-        requestId: request.requestId,
-        success: true,
-        result: sessionId,
-      );
-      
-    case SshIsolateMessageType.execute:
-      await Future.delayed(const Duration(milliseconds: 50)); // Simulate execution
-      return SshIsolateResponse(
-        requestId: request.requestId,
-        success: true,
-        result: {
-          'stdout': 'Command executed: ${request.data['command']}',
-          'stderr': '',
-          'exitCode': 0,
-        },
-      );
-      
-    case SshIsolateMessageType.sftp:
-      await Future.delayed(const Duration(milliseconds: 20)); // Simulate SFTP init
-      final sftpId = 'sftp_${DateTime.now().millisecondsSinceEpoch}';
-      return SshIsolateResponse(
-        requestId: request.requestId,
-        success: true,
-        result: sftpId,
-      );
-      
-    case SshIsolateMessageType.ping:
-      return SshIsolateResponse(
-        requestId: request.requestId,
-        success: true,
-        result: 'pong',
-      );
-      
-    case SshIsolateMessageType.close:
-      final sessionId = request.data['sessionId'] as String?;
-      if (sessionId != null) {
-        sessions.remove(sessionId);
-      }
-      return SshIsolateResponse(
-        requestId: request.requestId,
-        success: true,
-        result: 'closed',
-      );
-      
-    default:
-      return SshIsolateResponse(
-        requestId: request.requestId,
-        success: false,
-        error: 'Unsupported operation: ${request.type}',
-      );
+  try {
+    switch (request.type) {
+      case SshIsolateMessageType.connect:
+        // Create real SSH connection using Rust client
+        final client = rust_ssh.SshClient();
+        final config = rust_ssh.SshConfig(
+          host: request.data['host'] as String,
+          port: request.data['port'] as int,
+          username: request.data['username'] as String,
+          password: request.data['password'] as String?,
+          timeout: Duration(milliseconds: request.data['timeout'] as int),
+        );
+        
+        await client.connect(config);
+        
+        final sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
+        sessions[sessionId] = client;
+        
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: true,
+          result: sessionId,
+        );
+        
+      case SshIsolateMessageType.connectWithKey:
+        // Create real SSH connection with key using Rust client
+        final client = rust_ssh.SshClient();
+        final config = rust_ssh.SshConfig(
+          host: request.data['host'] as String,
+          port: request.data['port'] as int,
+          username: request.data['username'] as String,
+          privateKey: request.data['privateKey'] as String,
+          passphrase: request.data['passphrase'] as String?,
+          timeout: Duration(milliseconds: request.data['timeout'] as int),
+        );
+        
+        await client.connect(config);
+        
+        final sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
+        sessions[sessionId] = client;
+        
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: true,
+          result: sessionId,
+        );
+        
+      case SshIsolateMessageType.execute:
+        final sessionId = request.data['sessionId'] as String;
+        final command = request.data['command'] as String;
+        final client = sessions[sessionId];
+        
+        if (client == null || !client.isConnected) {
+          return SshIsolateResponse(
+            requestId: request.requestId,
+            success: false,
+            error: 'SSH session not found or not connected',
+          );
+        }
+        
+        final result = await client.execute(command);
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: true,
+          result: {
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'exitCode': result.exitCode,
+          },
+        );
+        
+      case SshIsolateMessageType.shell:
+        final sessionId = request.data['sessionId'] as String;
+        final client = sessions[sessionId];
+        
+        if (client == null || !client.isConnected) {
+          return SshIsolateResponse(
+            requestId: request.requestId,
+            success: false,
+            error: 'SSH session not found or not connected',
+          );
+        }
+        
+        // Create shell session
+        await client.createShell();
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: true,
+          result: 'shell_created',
+        );
+        
+      case SshIsolateMessageType.sftp:
+        final sessionId = request.data['sessionId'] as String;
+        final client = sessions[sessionId];
+        
+        if (client == null || !client.isConnected) {
+          return SshIsolateResponse(
+            requestId: request.requestId,
+            success: false,
+            error: 'SSH session not found or not connected',
+          );
+        }
+        
+        // Create SFTP client
+        final sftpClient = rust_ssh.SftpClient(client);
+        await sftpClient.initialize();
+        
+        final sftpId = 'sftp_${DateTime.now().millisecondsSinceEpoch}';
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: true,
+          result: sftpId,
+        );
+        
+      case SshIsolateMessageType.ping:
+        final sessionId = request.data['sessionId'] as String;
+        final client = sessions[sessionId];
+        
+        if (client == null || !client.isConnected) {
+          return SshIsolateResponse(
+            requestId: request.requestId,
+            success: false,
+            error: 'SSH session not found or not connected',
+          );
+        }
+        
+        // Execute ping command to test connection
+        final result = await client.execute('echo pong');
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: true,
+          result: result.stdout.trim(),
+        );
+        
+      case SshIsolateMessageType.close:
+        final sessionId = request.data['sessionId'] as String?;
+        if (sessionId != null) {
+          final client = sessions.remove(sessionId);
+          if (client != null) {
+            await client.disconnect();
+          }
+        }
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: true,
+          result: 'closed',
+        );
+        
+      default:
+        return SshIsolateResponse(
+          requestId: request.requestId,
+          success: false,
+          error: 'Unsupported operation: ${request.type}',
+        );
+    }
+  } catch (e) {
+    return SshIsolateResponse(
+      requestId: request.requestId,
+      success: false,
+      error: 'SSH operation failed: $e',
+    );
   }
 }
 

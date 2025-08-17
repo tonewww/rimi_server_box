@@ -1,150 +1,33 @@
 import 'dart:async';
-import 'package:computer/computer.dart';
 import 'package:flutter/foundation.dart';
-import 'package:server_box/data/model/app/error.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
-import 'package:server_box/data/res/store.dart';
+import 'package:server_box/ffi/ssh_isolate_adapter.dart';
 
 /// Async wrapper for SSH client generation that runs in an isolate
 /// This prevents blocking the main UI thread during SSH connections
 
-// Define the parameter structure for isolate communication
-class SshConnectionParams {
-  final String ip;
-  final int port;
-  final String user;
-  final String? password;
-  final String? keyId;
-  final String? jumpId;
-  final int timeoutSeconds;
-
-  SshConnectionParams({
-    required this.ip,
-    required this.port,
-    required this.user,
-    this.password,
-    this.keyId,
-    this.jumpId,
-    required this.timeoutSeconds,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'ip': ip,
-    'port': port,
-    'user': user,
-    'password': password,
-    'keyId': keyId,
-    'jumpId': jumpId,
-    'timeoutSeconds': timeoutSeconds,
-  };
-
-  factory SshConnectionParams.fromJson(Map<String, dynamic> json) =>
-      SshConnectionParams(
-        ip: json['ip'],
-        port: json['port'],
-        user: json['user'],
-        password: json['password'],
-        keyId: json['keyId'],
-        jumpId: json['jumpId'],
-        timeoutSeconds: json['timeoutSeconds'],
-      );
-}
-
-class SshConnectionResult {
-  final bool success;
-  final String? error;
-  final String? clientId; // Unique identifier for the SSH client
-
-  SshConnectionResult({
-    required this.success,
-    this.error,
-    this.clientId,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'success': success,
-    'error': error,
-    'clientId': clientId,
-  };
-
-  factory SshConnectionResult.fromJson(Map<String, dynamic> json) =>
-      SshConnectionResult(
-        success: json['success'],
-        error: json['error'],
-        clientId: json['clientId'],
-      );
-}
-
-/// Isolate worker function for SSH connections
-Future<SshConnectionResult> _sshConnectWorker(SshConnectionParams params) async {
-  try {
-    // TODO: Import SSH client in isolate context
-    // For now, simulate connection work with actual delay to test non-blocking
-    await Future.delayed(Duration(milliseconds: 100 + (params.timeoutSeconds * 10)));
-    
-    // Simulate occasional connection failures for testing
-    if (params.ip.contains('invalid') || params.user == 'invalid') {
-      throw Exception('Connection failed: Invalid host or credentials');
-    }
-    
-    // Generate a client ID
-    final clientId = 'ssh_${params.ip}_${params.port}_${DateTime.now().millisecondsSinceEpoch}';
-    
-    debugPrint('SSH Isolate: Connected to ${params.ip}:${params.port} with client ID: $clientId');
-    
-    return SshConnectionResult(
-      success: true,
-      clientId: clientId,
-    );
-  } catch (e) {
-    debugPrint('SSH Isolate: Connection failed: $e');
-    return SshConnectionResult(
-      success: false,
-      error: e.toString(),
-    );
-  }
-}
-
-/// Async SSH client generator that uses Computer (isolate) for non-blocking connections
+/// Async SSH client generator that uses IsolateSSHClient for non-blocking connections
 class AsyncSshClientGenerator {
-  /// Generate an SSH client asynchronously in an isolate
+  /// Generate an SSH client asynchronously using IsolateSSHClient
   /// This prevents blocking the main UI thread during connection
   static Future<dynamic> genClientAsync(
     Spi spi, {
     Duration timeout = const Duration(seconds: 5),
   }) async {
-    final params = SshConnectionParams(
-      ip: spi.ip,
-      port: spi.port,
-      user: spi.user,
-      password: spi.pwd,
-      keyId: spi.keyId,
-      jumpId: spi.jumpId,
-      timeoutSeconds: timeout.inSeconds,
-    );
 
     try {
-      // Use Computer to run SSH connection in isolate
-      final result = await Computer.shared.start(_sshConnectWorker, params);
-
-      if (!result.success) {
-        throw SSHErr(
-          type: SSHErrType.connect,
-          message: result.error ?? 'SSH connection failed',
-        );
-      }
-
-      // TODO: Return actual SSH client once isolate implementation is complete
-      // For now, return a compatible mock client wrapped as IsolateSSHClient
-      final mockClient = MockSSHClient(
-        id: result.clientId!,
+      // Connect directly using IsolateSSHClient for proper session management
+      // This ensures all SSH operations go through the same isolate system
+      final isolateClient = await IsolateSSHClient.connect(
         host: spi.ip,
         port: spi.port,
-        connected: true,
+        username: spi.user,
+        password: spi.pwd ?? '',
+        timeout: timeout,
       );
       
-      // Return a wrapper that acts like IsolateSSHClient
-      return MockIsolateSSHClient(mockClient);
+      debugPrint('AsyncSshClientGenerator: Successfully connected to ${spi.ip}:${spi.port} via IsolateSSHClient');
+      return isolateClient;
     } catch (e) {
       debugPrint('AsyncSshClientGenerator: Failed to connect to ${spi.ip}: $e');
       rethrow;
