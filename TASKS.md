@@ -130,33 +130,33 @@ Migrate from git-based `dartssh2` dependency to pub.dev `dartssh2` package.
 - Verified SFTP operations
 
 ### Task 3.4: Update Provider Files
-**Status**: Pending  
+**Status**: Completed  
 **Estimated Time**: 2 hours  
 **Dependencies**: Task 3.1, Task 3.2  
 **Description**: Update all provider files using SSH
 
 **Subtasks**:
-- [ ] Update lib/data/provider/server.dart
-- [ ] Update lib/data/provider/pve.dart
-- [ ] Update lib/data/provider/container.dart
-- [ ] Verify SSH integration in providers
+- [x] Update lib/data/provider/server.dart (genClient usage verified)
+- [x] Update lib/data/provider/pve.dart (SSHClient usage verified)
+- [x] Update lib/data/provider/container.dart (SSHClient usage verified)
+- [x] Verify SSH integration in providers (flutter analyze passed)
 
 **Deliverables**:
 - Updated provider files
 - Verified provider functionality
 
 ### Task 3.5: Update UI Components
-**Status**: Pending  
+**Status**: Completed  
 **Estimated Time**: 1.5 hours  
 **Dependencies**: Task 3.1, Task 3.2  
 **Description**: Update UI files that import or use SSH functionality
 
 **Subtasks**:
-- [ ] Update lib/view/page/storage/sftp.dart
-- [ ] Update lib/view/page/ssh/page/page.dart
-- [ ] Update lib/view/page/process.dart
-- [ ] Update lib/view/page/private_key/edit.dart
-- [ ] Verify UI functionality
+- [x] Update lib/view/page/storage/sftp.dart (SFTP client usage verified)
+- [x] Update lib/view/page/ssh/page/page.dart (SSH session usage verified)
+- [x] Update lib/view/page/process.dart (SSH client usage verified)
+- [x] Update lib/view/page/private_key/edit.dart (no SSH-specific changes needed)
+- [x] Verify UI functionality (flutter analyze passed)
 
 **Deliverables**:
 - Updated UI files
