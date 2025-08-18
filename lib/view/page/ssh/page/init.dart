@@ -34,12 +34,16 @@ extension _Init on SSHPageState {
       onStatus: (p0) {
         _writeLn(p0.toString());
       },
-      onKeyboardInteractive: (_) => KeybordInteractive.defaultHandle(widget.args.spi, ctx: context),
+      onKeyboardInteractive: (_) =>
+          KeybordInteractive.defaultHandle(widget.args.spi, ctx: context),
     );
 
     _writeLn('${libL10n.execute}: Shell');
     final session = await _client?.shell(
-      pty: SSHPtyConfig(width: _terminal.viewWidth, height: _terminal.viewHeight),
+      pty: SSHPtyConfig(
+        width: _terminal.viewWidth,
+        height: _terminal.viewHeight,
+      ),
       environment: widget.args.spi.envs,
     );
 
@@ -86,6 +90,8 @@ extension _Init on SSHPageState {
     widget.args.focusNode?.requestFocus();
 
     await session.done;
+    // Session ended; stop periodic ping checks
+    _discontinuityTimer?.cancel();
     if (mounted && widget.args.notFromTab) {
       context.pop();
     }
@@ -119,8 +125,16 @@ extension _Init on SSHPageState {
           _catchTimeout();
         }
       });
-      await _client?.ping();
-      throwTimeout = false;
+      try {
+        await _client?.ping();
+        throwTimeout = false; // Only mark success after ping completes
+      } catch (e, stack) {
+        // Treat ping failure as connection loss
+        Loggers.app.warning('SSH ping failed', e, stack);
+        if (throwTimeout) {
+          _catchTimeout();
+        }
+      }
     });
   }
 
@@ -158,5 +172,7 @@ extension on SSHPageState {
     } catch (e, stackTrace) {
       Loggers.app.warning('Error closing SSH session: $e\n$stackTrace');
     }
+    // Stop ping timer to avoid further attempts after manual disconnect
+    _discontinuityTimer?.cancel();
   }
 }
