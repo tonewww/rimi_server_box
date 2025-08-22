@@ -1,24 +1,24 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:fl_lib/fl_lib.dart';
-import 'package:server_box/core/libssh2/libssh2_client.dart';
+import 'package:server_box/core/libssh2/libssh2_ffi_client.dart';
 import 'package:server_box/core/libssh2/ssh_logger.dart';
 
-/// Adapter to make LibSSH2Client compatible with dartssh2 interface
-/// This allows gradual migration from dartssh2 to libssh2
+// Re-export SFTP types from sftp_adapter
+export 'package:server_box/core/libssh2/sftp_adapter.dart' show SftpClient;
+
+/// Adapter to provide SSH functionality using libssh2 FFI
 class SSHClient {
-  final LibSSH2Client _client;
+  final LibSSH2FFIClient _client;
   final SSHLogger logger;
   
   SSHClient._({
-    required LibSSH2Client client,
+    required LibSSH2FFIClient client,
     required this.logger,
   }) : _client = client;
   
-  /// Create SSH client from Socket (compatibility method)
+  /// Factory constructor for compatibility (not used with libssh2)
   factory SSHClient(
     dynamic socket, {
     required String username,
@@ -26,31 +26,31 @@ class SSHClient {
     List<dynamic>? identities,
     dynamic onUserInfoRequest,
   }) {
-    // This factory is for compatibility with dartssh2
-    // In reality, we'll use the connect method below
-    throw UnimplementedError('Use SSHClient.connect instead');
+    throw UnimplementedError('Use SSHClient.connect for libssh2 implementation');
   }
   
-  /// Connect to SSH server using libssh2
+  /// Connect to SSH server using libssh2 FFI
   static Future<SSHClient> connect(
     String host,
     int port, {
     required String username,
     String? password,
     String? privateKeyPath,
+    String? publicKeyPath,
     String? passphrase,
     Duration timeout = const Duration(seconds: 30),
     SSHLogger? logger,
   }) async {
     logger ??= SSHLogger();
-    logger.info('[ADAPTER] Creating SSH client for $username@$host:$port');
+    logger.info('[ADAPTER] Connecting to $username@$host:$port using libssh2 FFI');
     
-    final client = LibSSH2Client(
+    final client = LibSSH2FFIClient(
       host: host,
       port: port,
       username: username,
       password: password,
       privateKeyPath: privateKeyPath,
+      publicKeyPath: publicKeyPath,
       passphrase: passphrase,
       timeout: timeout,
       logger: logger,
@@ -64,7 +64,7 @@ class SSHClient {
     );
   }
   
-  /// Execute a command (compatibility method)
+  /// Execute a command
   Future<SSHSession> execute(
     String command, {
     dynamic pty,
@@ -72,7 +72,6 @@ class SSHClient {
   }) async {
     logger.info('[ADAPTER] Executing command: $command');
     
-    // For simple command execution, we don't need a full shell
     final result = await _client.execute(command);
     
     return SSHSession._(
@@ -83,7 +82,7 @@ class SSHClient {
     );
   }
   
-  /// Open a shell session (compatibility method)
+  /// Open a shell session
   Future<SSHSession> shell({
     dynamic pty,
     Map<String, String>? environment,
@@ -96,13 +95,13 @@ class SSHClient {
     String termType = 'xterm-256color';
     
     if (pty != null) {
-      // Assuming pty is SSHPtyConfig from dartssh2
       try {
-        cols = pty.width ?? 80;
-        rows = pty.height ?? 24;
-        termType = pty.type ?? 'xterm-256color';
+        // Handle both SSHPtyConfig and similar structures
+        cols = pty.width ?? pty.cols ?? 80;
+        rows = pty.height ?? pty.rows ?? 24;
+        termType = pty.type ?? pty.termType ?? 'xterm-256color';
       } catch (e) {
-        logger.warning('[ADAPTER] Failed to parse PTY config', e);
+        logger.warning('[ADAPTER] Failed to parse PTY config, using defaults', e);
       }
     }
     
@@ -120,13 +119,19 @@ class SSHClient {
     );
   }
   
-  /// Ping for keep-alive (compatibility method)
+  /// Run a command and return the output
+  Future<String> run(String command) async {
+    logger.info('[ADAPTER] Running command: $command');
+    return await _client.execute(command);
+  }
+  
+  /// Ping for keep-alive
   Future<void> ping() async {
     await _client.ping();
   }
   
-  /// Check if connection is closed (compatibility property)
-  bool get isClosed => false; // Always return false since we manage connection internally
+  /// Check if connection is closed
+  bool get isClosed => false; // Managed internally by libssh2
   
   /// Close the connection
   Future<void> close() async {
@@ -136,195 +141,136 @@ class SSHClient {
   
   /// Run SFTP (not implemented yet)
   Future<dynamic> sftp() async {
-    throw UnimplementedError('SFTP not yet implemented in libssh2 adapter');
+    throw UnimplementedError('SFTP not yet implemented in libssh2 FFI adapter');
   }
   
   /// Forward local port (not implemented yet)
   Future<dynamic> forwardLocal(String host, int port) async {
-    throw UnimplementedError('Port forwarding not yet implemented in libssh2 adapter');
-  }
-  
-  /// Run a command and return the output (compatibility method)
-  Future<String> run(String command) async {
-    logger.info('[ADAPTER] Running command: $command');
-    return await _client.execute(command);
+    throw UnimplementedError('Port forwarding not yet implemented in libssh2 FFI adapter');
   }
 }
 
-/// SSH Session wrapper for compatibility
+/// SSH Session wrapper
 class SSHSession {
-  final LibSSH2Client _client;
+  final LibSSH2FFIClient? _client;
+  final LibSSH2FFISession? _session;
+  final String? _command;
+  final String? _output;
   final SSHLogger logger;
-  final String? command;
-  final String? output;
-  final LibSSH2Session? _session;
-  
-  StreamController<Uint8List>? _stdoutController;
-  StreamController<Uint8List>? _stderrController;
-  StreamController<Uint8List>? _stdinController;
   
   SSHSession._({
-    required LibSSH2Client client,
+    LibSSH2FFIClient? client,
+    LibSSH2FFISession? session,
+    String? command,
+    String? output,
     required this.logger,
-    this.command,
-    this.output,
-    LibSSH2Session? session,
   }) : _client = client,
-       _session = session {
-    if (session != null) {
-      _setupStreams();
-    } else if (output != null) {
-      _setupStaticOutput();
-    }
-  }
+       _session = session,
+       _command = command,
+       _output = output;
   
-  void _setupStreams() {
-    _stdoutController = StreamController<Uint8List>.broadcast();
-    _stderrController = StreamController<Uint8List>.broadcast();
-    _stdinController = StreamController<Uint8List>.broadcast();
-    
-    // Forward streams from session
-    _session?.stdout.listen((data) {
-      logger.debug('[SESSION] Stdout: ${data.length} bytes');
-      _stdoutController?.add(data);
-    });
-    
-    _session?.stderr.listen((data) {
-      logger.debug('[SESSION] Stderr: ${data.length} bytes');
-      _stderrController?.add(data);
-    });
-    
-    _stdinController?.stream.listen((data) {
-      logger.debug('[SESSION] Stdin: ${data.length} bytes');
-      _session?.stdin.add(data);
-    });
-  }
-  
-  void _setupStaticOutput() {
-    _stdoutController = StreamController<Uint8List>.broadcast();
-    _stderrController = StreamController<Uint8List>.broadcast();
-    _stdinController = StreamController<Uint8List>.broadcast();
-    
-    // Add static output if available
-    if (output != null) {
-      _stdoutController!.add(utf8.encode(output!));
-      _stdoutController!.close();
-    }
-    _stderrController!.close();
-    _stdinController!.close();
-  }
-  
-  Stream<Uint8List> get stdout => _stdoutController?.stream ?? const Stream.empty();
-  Stream<Uint8List> get stderr => _stderrController?.stream ?? const Stream.empty();
-  Sink<Uint8List> get stdin => _stdinController?.sink ?? _NullSink();
-  
-  /// Resize terminal (for shell sessions)
-  Future<void> resizeTerminal(int width, int height, [int? pixelWidth, int? pixelHeight]) async {
+  Stream<Uint8List> get stdout {
     if (_session != null) {
-      logger.info('[SESSION] Resizing terminal to ${width}x$height');
-      await _session.resizeTerminal(width, height);
+      return _session.stdout;
+    }
+    // For command execution, return output as stream
+    if (_output != null) {
+      return Stream.value(Uint8List.fromList(_output.codeUnits));
+    }
+    return const Stream.empty();
+  }
+  
+  Stream<Uint8List> get stderr {
+    if (_session != null) {
+      return _session.stderr;
+    }
+    return const Stream.empty();
+  }
+  
+  Sink<Uint8List> get stdin {
+    if (_session != null) {
+      return _session.stdin;
+    }
+    // For command execution, create a dummy sink
+    return _DummySink();
+  }
+  
+  /// Resize terminal
+  Future<void> resizeTerminal(int cols, int rows) async {
+    if (_session != null) {
+      logger.info('[SESSION] Resizing terminal to ${cols}x${rows}');
+      await _session.resizeTerminal(cols, rows);
+    } else {
+      logger.warning('[SESSION] Cannot resize: not a shell session');
     }
   }
   
-  /// Close the session
-  Future<void> close() async {
+  /// Close session
+  void close() {
     logger.info('[SESSION] Closing session');
-    await _session?.close();
-    await _stdoutController?.close();
-    await _stderrController?.close();
-    await _stdinController?.close();
+    _session?.close();
   }
   
-  /// Get exit code (compatibility)
+  /// Get exit code
   int? get exitCode => _session?.exitCode;
   
-  /// Wait for done (compatibility)
+  /// Wait for session to complete
   Future<void> get done async {
-    await stdout.drain();
-    await stderr.drain();
-  }
-}
-
-/// Null sink for stdin when not available
-class _NullSink implements Sink<Uint8List> {
-  @override
-  void add(Uint8List data) {}
-  
-  @override
-  void close() {}
-}
-
-/// SSH Socket wrapper for compatibility
-class SSHSocket {
-  final String host;
-  final int port;
-  final Socket? _socket;
-  
-  SSHSocket._(this.host, this.port, this._socket);
-  
-  /// Connect to host (compatibility method)
-  static Future<SSHSocket> connect(
-    String host,
-    int port, {
-    Duration? timeout,
-  }) async {
-    // This is for compatibility only
-    // Real connection happens in SSHClient.connect
-    Socket? socket;
-    try {
-      socket = await Socket.connect(host, port, timeout: timeout);
-    } catch (e) {
-      // Ignore, we'll handle connection in SSHClient
+    // For command execution, complete immediately
+    if (_command != null) {
+      return;
     }
-    return SSHSocket._(host, port, socket);
-  }
-  
-  void close() {
-    _socket?.close();
+    // For shell session, wait for it to close
+    // This is a simplified implementation
+    while (_session != null) {
+      await Future.delayed(const Duration(seconds: 1));
+    }
   }
 }
 
-/// SSH PTY Config for compatibility
+/// Dummy sink for command execution
+class _DummySink implements Sink<Uint8List> {
+  @override
+  void add(Uint8List data) {
+    // Ignore input for command execution
+  }
+  
+  @override
+  void close() {
+    // Nothing to close
+  }
+}
+
+// Type aliases for compatibility
+class SSHSocket {
+  static Future<SSHSocket> connect(String host, int port, {Duration? timeout}) async {
+    // This is not used with libssh2, but provided for compatibility
+    throw UnimplementedError('Use SSHClient.connect for libssh2 implementation');
+  }
+}
+
+class SSHKeyPair {
+  static List<SSHKeyPair> fromPem(String pem, [String? passphrase]) {
+    // This is not used with libssh2, but provided for compatibility
+    throw UnimplementedError('Key pairs are handled internally by libssh2');
+  }
+  
+  static bool isEncryptedPem(String pem) {
+    // Simple check for encrypted PEM
+    return pem.contains('ENCRYPTED');
+  }
+  
+  String toPem() {
+    throw UnimplementedError('Key pairs are handled internally by libssh2');
+  }
+}
+
 class SSHPtyConfig {
   final int? width;
   final int? height;
   final String? type;
   
-  const SSHPtyConfig({
-    this.width = 80,
-    this.height = 24,
-    this.type = 'xterm-256color',
-  });
+  SSHPtyConfig({this.width, this.height, this.type});
 }
 
-/// SSH Key Pair for compatibility
-class SSHKeyPair {
-  final String privateKey;
-  final String? publicKey;
-  
-  SSHKeyPair(this.privateKey, [this.publicKey]);
-  
-  /// Load from PEM (compatibility method)
-  static List<SSHKeyPair> fromPem(String pem, [String? passphrase]) {
-    // This is simplified - in reality would parse the PEM
-    return [SSHKeyPair(pem)];
-  }
-  
-  /// Check if PEM is encrypted
-  static bool isEncryptedPem(String pem) {
-    return pem.contains('ENCRYPTED');
-  }
-  
-  /// Convert to PEM
-  String toPem() => privateKey;
-}
-
-// Extensions are provided by fl_lib, no need to redefine them
-
-/// SSH User Info Request Handler (compatibility)
 typedef SSHUserInfoRequestHandler = void Function(dynamic);
-
-/// Extend Uint8List with bytes property for compatibility
-extension Uint8ListBytes on Uint8List {
-  Uint8List takeBytes() => this;
-}

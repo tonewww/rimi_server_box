@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:path_provider/path_provider.dart';
 import 'package:server_box/core/libssh2/ssh_logger.dart';
 import 'package:server_box/core/libssh2/ssh_message.dart';
 
@@ -25,6 +24,8 @@ class LibSSH2Client {
   SSHConnectionStatus _status = SSHConnectionStatus.disconnected;
   Stream<List<int>>? _processStdout;
   Stream<List<int>>? _processStderr;
+  String? _pendingPassword;
+  bool _passwordSentGlobal = false;
   
   LibSSH2Client({
     required this.host,
@@ -44,6 +45,12 @@ class LibSSH2Client {
   /// Check if a command is available in the system
   Future<bool> _isCommandAvailable(String command) async {
     try {
+      // For absolute paths, check if file exists
+      if (command.startsWith('/')) {
+        final file = File(command);
+        return await file.exists();
+      }
+      // For command names, use which
       final result = await Process.run('which', [command]);
       return result.exitCode == 0;
     } catch (e) {
@@ -78,14 +85,19 @@ class LibSSH2Client {
       if (privateKeyPath != null) {
         logger.debug('[AUTH] Using private key authentication: $privateKeyPath');
         args.addAll(['-i', privateKeyPath!]);
-      }
-      
-      if (password != null) {
+        // When using key auth, disable password authentication to avoid prompts
+        args.addAll(['-o', 'PasswordAuthentication=no']);
+        args.addAll(['-o', 'PreferredAuthentications=publickey']);
+        args.addAll(['-o', 'PubkeyAuthentication=yes']);
+      } else if (password != null) {
         logger.debug('[AUTH] Password authentication will be used');
-        // Disable password prompts on stdin when using password auth
+        // When using password auth, disable public key authentication
         args.addAll(['-o', 'PasswordAuthentication=yes']);
         args.addAll(['-o', 'PreferredAuthentications=password']);
         args.addAll(['-o', 'PubkeyAuthentication=no']);
+      } else {
+        logger.warning('[AUTH] No authentication method specified, using default');
+        // Let SSH use its default authentication order
       }
       
       args.add('$username@$host');
@@ -93,90 +105,53 @@ class LibSSH2Client {
       logger.info('[CONNECT] Starting SSH process with args: ${args.join(' ')}');
       
       // Start SSH process
-      if (password != null && await _isCommandAvailable('sshpass')) {
-        // Use sshpass for password authentication if available
-        logger.info('[AUTH] Using sshpass for password authentication');
-        _process = await Process.start(
-          'sshpass',
-          ['-p', password!, 'ssh', ...args],
-          mode: ProcessStartMode.normal,
-        );
-      } else if (password != null && Platform.isMacOS) {
-        // On macOS, use expect with better error handling
-        logger.info('[AUTH] Using expect for password authentication on macOS');
+      if (password != null) {
+        // Check for sshpass in common locations (especially for macOS)
+        logger.info('[AUTH] Checking for sshpass for password authentication');
         
-        // Create expect script that properly handles interaction
-        final expectScript = '''
-#!/usr/bin/expect -f
-log_user 1
-set timeout -1
-spawn ssh ${args.join(' ')}
-
-expect {
-  -re "Are you sure you want to continue connecting" {
-    send "yes\\r"
-    exp_continue
-  }
-  -re "assword:" {
-    send "$password\\r"
-    set timeout 5
-    expect {
-      -re "Permission denied.*assword" {
-        exit 1
-      }
-      -re {[\\\$#>]\\s} {
-        # Successfully logged in
-        set timeout -1
-        interact
-      }
-      -re "Last login" {
-        # Successfully logged in
-        set timeout -1
-        interact
-      }
-      timeout {
-        # Assume login successful if no error
-        set timeout -1
-        interact
-      }
-    }
-  }
-  timeout {
-    # Connection timeout
-    exit 2
-  }
-  eof {
-    # End of file - SSH connection closed
-    exit 0
-  }
-}
-
-# Keep the process alive
-wait
-''';
+        final sshpassPaths = [
+          '/opt/homebrew/bin/sshpass',  // Apple Silicon homebrew path
+          '/usr/local/bin/sshpass',      // Intel homebrew path
+          'sshpass',                      // System PATH
+        ];
         
-        // Write expect script to temp file
-        final tempDir = await getTemporaryDirectory();
-        final tempFile = File('${tempDir.path}/ssh_expect_${DateTime.now().millisecondsSinceEpoch}.exp');
-        await tempFile.writeAsString(expectScript);
-        await Process.run('chmod', ['+x', tempFile.path]);
-        
-        _process = await Process.start(
-          'expect',
-          ['-f', tempFile.path],
-          mode: ProcessStartMode.normal,
-          environment: {
-            'TERM': 'xterm-256color',
-            'LC_ALL': 'en_US.UTF-8',
-          },
-        );
-        
-        // Keep the script file until process exits
-        _process!.exitCode.then((_) {
-          if (tempFile.existsSync()) {
-            tempFile.deleteSync();
+        String? sshpassPath;
+        for (final path in sshpassPaths) {
+          if (await _isCommandAvailable(path)) {
+            sshpassPath = path;
+            logger.info('[AUTH] Found sshpass at: $path');
+            break;
           }
-        });
+        }
+        
+        if (sshpassPath != null) {
+          logger.info('[AUTH] Using sshpass for password authentication');
+          _process = await Process.start(
+            sshpassPath,
+            ['-p', password!, 'ssh', ...args],
+            mode: ProcessStartMode.normal,
+            environment: {
+              'TERM': 'xterm-256color',
+              'LC_ALL': 'en_US.UTF-8',
+            },
+          );
+        } else if (Platform.isMacOS) {
+          logger.warning('[AUTH] sshpass not found in common locations');
+          logger.error('[AUTH] Please install sshpass: brew install hudochenkov/sshpass/sshpass');
+          throw Exception('sshpass is required for password authentication on macOS. Please install it with: brew install hudochenkov/sshpass/sshpass');
+        } else {
+          // On Linux, try to use SSH directly with password (won't work but try anyway)
+          logger.warning('[AUTH] sshpass not found, attempting direct SSH (may fail for password auth)');
+          _process = await Process.start(
+            'ssh',
+            args,
+            mode: ProcessStartMode.normal,
+            environment: {
+              'TERM': 'xterm-256color',
+              'LC_ALL': 'en_US.UTF-8',
+            },
+          );
+        }
       } else {
         _process = await Process.start(
           'ssh',
@@ -215,11 +190,28 @@ wait
     _processStdout = _process!.stdout.asBroadcastStream();
     _processStderr = _process!.stderr.asBroadcastStream();
     
+    // Buffer for accumulating stderr to detect password prompts
+    final stderrBuffer = StringBuffer();
+    
     // Forward stdout
     _processStdout!.listen(
       (data) {
-        logger.debug('[STDOUT] Received ${data.length} bytes');
+        final output = utf8.decode(data, allowMalformed: true);
+        logger.debug('[STDOUT] Received ${data.length} bytes: ${output.replaceAll('\n', '\\n').replaceAll('\r', '\\r')}');
         _stdoutController?.add(Uint8List.fromList(data));
+        
+        // Also check stdout for password prompt (sometimes appears here)
+        if (!_passwordSentGlobal && _pendingPassword != null && 
+            (output.contains("'s password:") || output.endsWith("password: "))) {
+          logger.info('[AUTH] Password prompt detected in stdout, sending password');
+          logger.debug('[AUTH] Stdout when prompt detected: "$output"');
+          _passwordSentGlobal = true;
+          _process!.stdin.write(_pendingPassword!);
+          _process!.stdin.write('\n');
+          _process!.stdin.flush();
+          logger.debug('[AUTH] Password sent from stdout handler');
+          _pendingPassword = null;
+        }
       },
       onError: (e) {
         logger.error('[STDOUT] Stream error', e);
@@ -237,6 +229,29 @@ wait
         final message = utf8.decode(data, allowMalformed: true);
         logger.debug('[STDERR] Received: $message');
         _stderrController?.add(Uint8List.fromList(data));
+        
+        // Accumulate stderr for password prompt detection
+        stderrBuffer.write(message);
+        final buffered = stderrBuffer.toString();
+        
+        // Check for password prompt in accumulated buffer
+        // The prompt appears as "user@host's password: " without newline
+        if (!_passwordSentGlobal && _pendingPassword != null) {
+          if (buffered.endsWith("'s password: ") || 
+              buffered.contains("'s password:")) {
+            logger.info('[AUTH] Password prompt detected in stderr stream handler');
+            logger.debug('[AUTH] Buffer content: \'$buffered\'');
+            _passwordSentGlobal = true;
+            stderrBuffer.clear();
+            
+            logger.debug('[AUTH] Writing password to stdin from stderr handler');
+            _process!.stdin.write(_pendingPassword!);
+            _process!.stdin.write('\n');
+            _process!.stdin.flush();
+            logger.debug('[AUTH] Password sent and flushed from stderr handler');
+            _pendingPassword = null;
+          }
+        }
         
         // Check for authentication errors
         if (message.contains('Permission denied') ||
@@ -282,6 +297,7 @@ wait
     StreamSubscription? stdoutSubscription;
     Timer? timeoutTimer;
     bool passwordSent = false;
+    bool authSuccess = false;
     
     // For macOS with expect, we need different connection detection
     final isUsingExpect = password != null && Platform.isMacOS;
@@ -297,55 +313,116 @@ wait
       }
     });
     
-    // Listen for password prompt in stderr (only if not using expect)
-    if (!isUsingExpect) {
-      stderrSubscription = _processStderr!.listen((data) {
-        final error = utf8.decode(data, allowMalformed: true);
-        
-        // Check for password prompt
-        if (!passwordSent && password != null && 
-            (error.contains('password:') || error.contains('Password:')) &&
-            !error.contains('read_passphrase')) {
-          logger.info('[AUTH] Password prompt detected, sending password');
+    // Buffer to accumulate stderr messages for password prompt detection
+    final stderrBuffer = StringBuffer();
+    
+    // Listen for password prompt in stderr
+    stderrSubscription = _processStderr!.listen((data) async {
+      final error = utf8.decode(data, allowMalformed: true);
+      
+      // Add to buffer for password prompt detection
+      stderrBuffer.write(error);
+      final bufferedError = stderrBuffer.toString();
+      
+      // Log all stderr for debugging password prompt detection
+      logger.debug('[AUTH] Stderr buffer content: ${bufferedError.replaceAll('\n', '\\n').replaceAll('\r', '\\r')}');
+      
+      // Check for password prompt (for macOS direct password handling)
+      // The password prompt appears as "ptw@192.168.50.7's password: " in stderr
+      if (!passwordSent && !_passwordSentGlobal && _pendingPassword != null) {
+        // Check if buffer ends with password prompt (no newline after prompt)
+        if (bufferedError.endsWith("'s password: ") || 
+            bufferedError.contains("'s password:")) {
+          logger.info('[AUTH] Password prompt detected in waitForConnection');
+          logger.debug('[AUTH] Buffer when prompt detected: "$bufferedError"');
+          logger.debug('[AUTH] Sending password: ${_pendingPassword!.replaceAll(RegExp(r'.'), '*')}');
+          
           passwordSent = true;
-          _process!.stdin.writeln(password!);
-          _process!.stdin.flush();
+          _passwordSentGlobal = true;
+          // Clear buffer after detecting password prompt
+          stderrBuffer.clear();
+          
+          // Send password to stdin
+          _process!.stdin.write(_pendingPassword!);
+          _process!.stdin.write('\n');
+          await _process!.stdin.flush();
+          logger.debug('[AUTH] Password written to stdin and flushed');
+          _pendingPassword = null; // Clear password after use
+          
+          // After sending password, wait for authentication result
+          // Give SSH some time to process the password
+          Future.delayed(const Duration(milliseconds: 1000), () {
+            // Send a simple command to trigger prompt output
+            if (!authSuccess && !completer.isCompleted) {
+              logger.debug('[AUTH] Sending echo command to verify connection');
+              _process!.stdin.write('echo "SSH_CONNECTED"\n');
+              _process!.stdin.flush();
+              logger.debug('[AUTH] Echo command sent');
+            }
+          });
         }
-        
-        // Check for connection errors
-        if (error.contains('Connection refused') ||
-            error.contains('No route to host') ||
-            error.contains('Permission denied')) {
-          logger.error('[CONNECT] Connection error: $error');
+      }
+      
+      // Check for authentication success in debug messages
+      if (error.contains('debug1: Authentication succeeded')) {
+        logger.info('[AUTH] Authentication succeeded');
+        authSuccess = true;
+        // Authentication succeeded, but shell might not be ready yet
+        // Send a command to trigger prompt
+        Future.delayed(const Duration(milliseconds: 200), () {
           if (!completer.isCompleted) {
-            timeoutTimer?.cancel();
-            stderrSubscription?.cancel();
-            stdoutSubscription?.cancel();
-            completer.completeError(Exception(error));
+            _process!.stdin.write('echo "SSH_CONNECTED"\n');
+            _process!.stdin.flush();
           }
+        });
+      }
+      
+      // Check for connection errors
+      if (error.contains('Connection refused') ||
+          error.contains('No route to host') ||
+          (error.contains('Permission denied') && passwordSent)) {
+        logger.error('[CONNECT] Connection error: $error');
+        if (!completer.isCompleted) {
+          timeoutTimer?.cancel();
+          stderrSubscription?.cancel();
+          stdoutSubscription?.cancel();
+          completer.completeError(Exception(error));
         }
-      });
-    }
+      }
+    });
     
     // Listen for connection success in stdout
     stdoutSubscription = _processStdout!.listen((data) {
       final output = utf8.decode(data, allowMalformed: true);
-      logger.debug('[CONNECT] Checking output for connection: ${output.substring(0, output.length.clamp(0, 100))}');
+      logger.debug('[CONNECT] Stdout received (${data.length} bytes): ${output.replaceAll('\n', '\\n').replaceAll('\r', '\\r')}');
       
       // For expect, look for spawn command or debug output
       if (isUsingExpect && output.contains('spawn ssh')) {
-        // Expect has started SSH, wait a bit more for actual connection
+        logger.debug('[CONNECT] Expect spawn command detected, waiting for actual connection');
         return;
       }
       
-      // Check for common shell prompts or welcome messages
-      if (output.contains('\$') || 
-          output.contains('#') || 
-          output.contains('>') ||
-          output.contains('Last login') ||
-          output.contains('Welcome') ||
-          (isUsingExpect && output.contains('debug1:'))) {
-        logger.info('[CONNECT] Connection established - prompt detected');
+      // Check for our connection verification echo or common shell prompts
+      final hasConnectedMarker = output.contains('SSH_CONNECTED');
+      final hasDollarPrompt = output.contains('\$');
+      final hasHashPrompt = output.contains('#');
+      final hasArrowPrompt = output.contains('>');
+      final hasTildePrompt = output.contains('~]') || output.contains(':~');
+      final hasAtSymbol = output.contains('@');
+      final hasLastLogin = output.contains('Last login');
+      final hasWelcome = output.contains('Welcome');
+      
+      logger.debug('[CONNECT] Prompt detection: connected=$hasConnectedMarker, \$=$hasDollarPrompt, #=$hasHashPrompt, >=$hasArrowPrompt, ~=$hasTildePrompt, @=$hasAtSymbol, lastlogin=$hasLastLogin, welcome=$hasWelcome');
+      
+      if (hasConnectedMarker ||
+          hasDollarPrompt || 
+          hasHashPrompt || 
+          hasArrowPrompt ||
+          hasTildePrompt ||
+          (hasAtSymbol && (output.contains(':~') || output.contains(':/'))) ||
+          hasLastLogin ||
+          hasWelcome) {
+        logger.info('[CONNECT] Connection established - prompt detected in output: "${output.substring(0, output.length.clamp(0, 50))}"');
         if (!completer.isCompleted) {
           timeoutTimer?.cancel();
           stderrSubscription?.cancel();
@@ -541,6 +618,8 @@ wait
     
     _process = null;
     _status = SSHConnectionStatus.disconnected;
+    _passwordSentGlobal = false;
+    _pendingPassword = null;
     
     await _stdoutController?.close();
     await _stderrController?.close();

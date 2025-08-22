@@ -1,15 +1,76 @@
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
+
+// Helper function to get the executable directory
+String _getExecutableDir() {
+  final executable = Platform.resolvedExecutable;
+  final executableDir = File(executable).parent.path;
+  return executableDir;
+}
+
+// Load system libraries for socket operations
+final DynamicLibrary _libc = Platform.isWindows
+    ? DynamicLibrary.open('ws2_32.dll')
+    : DynamicLibrary.process();
 
 // Load libssh2 library
 final DynamicLibrary _libssh2 = () {
   if (Platform.isWindows) {
     return DynamicLibrary.open('libssh2.dll');
   } else if (Platform.isMacOS) {
-    return DynamicLibrary.open('libssh2.dylib');
+    // Try multiple paths for macOS, prioritizing bundled library
+    final execDir = _getExecutableDir();
+    final projectRoot = '/Users/tgy/workspace/duotai/rimi_server_box';
+    final paths = [
+      // Try @rpath first (for properly configured bundles)
+      '@rpath/libssh2.dylib',
+      // For development - use absolute path to the lib directory
+      '$projectRoot/lib/libssh2.dylib',
+      // For bundled app - explicit path to Frameworks
+      '$execDir/../Frameworks/libssh2.dylib',
+      // Alternative bundled paths
+      '${execDir.replaceAll('/MacOS', '')}/Frameworks/libssh2.dylib',
+      '$execDir/libssh2.dylib',
+      // Current directory attempts
+      '${Directory.current.path}/lib/libssh2.dylib',
+      // Fallback to system paths (but may be blocked by sandbox)
+      '/opt/homebrew/lib/libssh2.dylib',  // Homebrew ARM64
+      '/usr/local/lib/libssh2.dylib',      // Homebrew Intel
+    ];
+    
+    for (final path in paths) {
+      try {
+        // Try to load directly without existence check
+        // File.existsSync might fail due to sandbox restrictions
+        return DynamicLibrary.open(path);
+      } catch (e) {
+        // Log error and try next path
+        if (kDebugMode) {
+          print('Failed to load libssh2 from $path: $e');
+        }
+      }
+    }
+    throw Exception('libssh2.dylib not found. Searched paths: ${paths.join(", ")}');
   } else if (Platform.isLinux) {
-    return DynamicLibrary.open('libssh2.so');
+    // Try bundled library first
+    final paths = [
+      'lib/libssh2.so',
+      './libssh2.so',
+      'libssh2.so',
+      '/usr/lib/libssh2.so',
+      '/usr/local/lib/libssh2.so',
+    ];
+    
+    for (final path in paths) {
+      try {
+        return DynamicLibrary.open(path);
+      } catch (_) {
+        // Try next path
+      }
+    }
+    throw Exception('libssh2.so not found');
   } else if (Platform.isAndroid) {
     return DynamicLibrary.open('libssh2.so');
   } else if (Platform.isIOS) {
@@ -17,6 +78,57 @@ final DynamicLibrary _libssh2 = () {
   }
   throw UnsupportedError('Unsupported platform');
 }();
+
+// Native socket types and functions
+class SocketAF {
+  static const int AF_INET = 2;   // IPv4
+  static const int AF_INET6 = 10; // IPv6 on Linux, 30 on macOS
+}
+
+class SocketType {
+  static const int SOCK_STREAM = 1; // TCP
+}
+
+class SocketProto {
+  static const int IPPROTO_TCP = 6;
+}
+
+// Socket address structures
+final class SockaddrIn extends Struct {
+  @Uint16()
+  external int sin_family;
+  
+  @Uint16()
+  external int sin_port;
+  
+  @Uint32()
+  external int sin_addr;
+  
+  @Array(8)
+  external Array<Uint8> sin_zero;
+}
+
+// Native socket function signatures
+typedef SocketNative = Int32 Function(Int32 domain, Int32 type, Int32 protocol);
+typedef Socket = int Function(int domain, int type, int protocol);
+
+typedef ConnectNative = Int32 Function(Int32 socket, Pointer<SockaddrIn> address, Uint32 addressLen);
+typedef Connect = int Function(int socket, Pointer<SockaddrIn> address, int addressLen);
+
+typedef CloseNative = Int32 Function(Int32 fd);
+typedef Close = int Function(int fd);
+
+typedef SendNative = IntPtr Function(Int32 socket, Pointer<Uint8> buffer, IntPtr length, Int32 flags);
+typedef Send = int Function(int socket, Pointer<Uint8> buffer, int length, int flags);
+
+typedef RecvNative = IntPtr Function(Int32 socket, Pointer<Uint8> buffer, IntPtr length, Int32 flags);
+typedef Recv = int Function(int socket, Pointer<Uint8> buffer, int length, int flags);
+
+typedef InetPtonNative = Int32 Function(Int32 af, Pointer<Utf8> src, Pointer<Uint32> dst);
+typedef InetPton = int Function(int af, Pointer<Utf8> src, Pointer<Uint32> dst);
+
+typedef HtonsNative = Uint16 Function(Uint16 hostshort);
+typedef Htons = int Function(int hostshort);
 
 // Type definitions
 typedef LibSSH2SessionPtr = Pointer<Void>;
@@ -97,8 +209,17 @@ typedef LibSSH2Init = int Function(int flags);
 typedef LibSSH2ExitNative = Void Function();
 typedef LibSSH2Exit = void Function();
 
-typedef LibSSH2SessionInitNative = LibSSH2SessionPtr Function();
-typedef LibSSH2SessionInit = LibSSH2SessionPtr Function();
+// libssh2_session_init_ex takes 4 optional parameters (all can be NULL/0)
+typedef LibSSH2SessionInitNative = LibSSH2SessionPtr Function(
+    Pointer<Void> myalloc,  // custom allocator (can be NULL)
+    Pointer<Void> myfree,   // custom free (can be NULL)  
+    Pointer<Void> myrealloc, // custom realloc (can be NULL)
+    Pointer<Void> abstract); // abstract pointer (can be NULL)
+typedef LibSSH2SessionInit = LibSSH2SessionPtr Function(
+    Pointer<Void> myalloc,
+    Pointer<Void> myfree,
+    Pointer<Void> myrealloc,
+    Pointer<Void> abstract);
 
 typedef LibSSH2SessionFreeNative = Int32 Function(LibSSH2SessionPtr session);
 typedef LibSSH2SessionFree = int Function(LibSSH2SessionPtr session);
@@ -127,19 +248,29 @@ typedef LibSSH2SessionGetBlockingNative = Int32 Function(LibSSH2SessionPtr sessi
 typedef LibSSH2SessionGetBlocking = int Function(LibSSH2SessionPtr session);
 
 typedef LibSSH2UserauthPasswordNative = Int32 Function(
-    LibSSH2SessionPtr session, Pointer<Utf8> username, Pointer<Utf8> password);
+    LibSSH2SessionPtr session, 
+    Pointer<Utf8> username, 
+    Uint32 usernameLen,
+    Pointer<Utf8> password,
+    Uint32 passwordLen);
 typedef LibSSH2UserauthPassword = int Function(
-    LibSSH2SessionPtr session, Pointer<Utf8> username, Pointer<Utf8> password);
+    LibSSH2SessionPtr session, 
+    Pointer<Utf8> username, 
+    int usernameLen,
+    Pointer<Utf8> password,
+    int passwordLen);
 
 typedef LibSSH2UserauthPublicKeyFromFileNative = Int32 Function(
     LibSSH2SessionPtr session,
     Pointer<Utf8> username,
+    Uint32 usernameLen,
     Pointer<Utf8> publicKey,
     Pointer<Utf8> privateKey,
     Pointer<Utf8> passphrase);
 typedef LibSSH2UserauthPublicKeyFromFile = int Function(
     LibSSH2SessionPtr session,
     Pointer<Utf8> username,
+    int usernameLen,
     Pointer<Utf8> publicKey,
     Pointer<Utf8> privateKey,
     Pointer<Utf8> passphrase);
@@ -181,9 +312,21 @@ typedef KeyboardResponseCallback = Void Function(
     Pointer<Void> abstract);
 
 typedef LibSSH2ChannelOpenSessionNative = LibSSH2ChannelPtr Function(
-    LibSSH2SessionPtr session);
+    LibSSH2SessionPtr session,
+    Pointer<Utf8> channelType,
+    Uint32 channelTypeLen,
+    Uint32 windowSize,
+    Uint32 packetSize,
+    Pointer<Utf8> message,
+    Uint32 messageLen);
 typedef LibSSH2ChannelOpenSession = LibSSH2ChannelPtr Function(
-    LibSSH2SessionPtr session);
+    LibSSH2SessionPtr session,
+    Pointer<Utf8> channelType,
+    int channelTypeLen,
+    int windowSize,
+    int packetSize,
+    Pointer<Utf8> message,
+    int messageLen);
 
 typedef LibSSH2ChannelFreeNative = Int32 Function(LibSSH2ChannelPtr channel);
 typedef LibSSH2ChannelFree = int Function(LibSSH2ChannelPtr channel);
@@ -421,4 +564,85 @@ class LibSSH2 {
   static final LibSSH2ChannelRequestPtySize channelRequestPtySize = _libssh2
       .lookup<NativeFunction<LibSSH2ChannelRequestPtySizeNative>>('libssh2_channel_request_pty_size_ex')
       .asFunction();
+}
+
+// Native socket operations
+class NativeSocket {
+  // Function pointers
+  static final Socket socket = _libc
+      .lookup<NativeFunction<SocketNative>>('socket')
+      .asFunction();
+      
+  static final Connect connect = _libc
+      .lookup<NativeFunction<ConnectNative>>('connect')
+      .asFunction();
+      
+  static final Close close = _libc
+      .lookup<NativeFunction<CloseNative>>('close')
+      .asFunction();
+      
+  static final Send send = _libc
+      .lookup<NativeFunction<SendNative>>('send')
+      .asFunction();
+      
+  static final Recv recv = _libc
+      .lookup<NativeFunction<RecvNative>>('recv')
+      .asFunction();
+      
+  static final InetPton inetPton = _libc
+      .lookup<NativeFunction<InetPtonNative>>('inet_pton')
+      .asFunction();
+      
+  static final Htons htons = _libc
+      .lookup<NativeFunction<HtonsNative>>('htons')
+      .asFunction();
+      
+  /// Create a TCP socket and connect to the specified host and port
+  static int createAndConnect(String host, int port) {
+    // Create socket
+    final socketFd = socket(SocketAF.AF_INET, SocketType.SOCK_STREAM, SocketProto.IPPROTO_TCP);
+    if (socketFd < 0) {
+      throw Exception('Failed to create socket: $socketFd');
+    }
+    
+    // Prepare address structure
+    final addr = calloc<SockaddrIn>();
+    try {
+      addr.ref.sin_family = SocketAF.AF_INET;
+      addr.ref.sin_port = htons(port);
+      
+      // Convert IP address string to binary
+      final hostPtr = host.toNativeUtf8();
+      final addrPtr = calloc<Uint32>();
+      try {
+        final result = inetPton(SocketAF.AF_INET, hostPtr, addrPtr);
+        if (result != 1) {
+          close(socketFd);
+          throw Exception('Invalid IP address: $host');
+        }
+        addr.ref.sin_addr = addrPtr.value;
+      } finally {
+        calloc.free(hostPtr);
+        calloc.free(addrPtr);
+      }
+      
+      // Connect
+      final connectResult = connect(socketFd, addr, sizeOf<SockaddrIn>());
+      if (connectResult < 0) {
+        close(socketFd);
+        throw Exception('Failed to connect to $host:$port: $connectResult');
+      }
+      
+      return socketFd;
+    } finally {
+      calloc.free(addr);
+    }
+  }
+  
+  /// Close a socket
+  static void closeSocket(int socketFd) {
+    if (socketFd >= 0) {
+      close(socketFd);
+    }
+  }
 }

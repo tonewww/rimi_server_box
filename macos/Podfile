@@ -1,4 +1,4 @@
-platform :osx, '10.15'
+platform :osx, '10.14'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -28,16 +28,47 @@ flutter_macos_podfile_setup
 
 target 'Runner' do
   use_frameworks!
-  use_modular_headers!
 
   flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
-  # target 'RunnerTests' do
-  #   inherit! :search_paths
-  # end
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+  end
+  
+  # Add build phase to copy libssh2.dylib to Frameworks
+  installer.pods_project.targets.each do |target|
+    if target.name == 'Pods-Runner'
+      phase = target.new_shell_script_build_phase('Copy libssh2 Library')
+      phase.shell_script = <<-SCRIPT
+        # Copy libssh2.dylib to Frameworks directory
+        LIBSSH2_PATH="${SRCROOT}/libssh2.dylib"
+        FRAMEWORKS_DIR="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+        
+        echo "Looking for libssh2.dylib at: $LIBSSH2_PATH"
+        echo "Destination: $FRAMEWORKS_DIR"
+        
+        if [ -f "$LIBSSH2_PATH" ]; then
+          echo "Found libssh2.dylib, copying to Frameworks"
+          mkdir -p "$FRAMEWORKS_DIR"
+          cp -f "$LIBSSH2_PATH" "$FRAMEWORKS_DIR/"
+          
+          # Update the library's install name
+          install_name_tool -id "@rpath/libssh2.dylib" "$FRAMEWORKS_DIR/libssh2.dylib"
+          
+          # Sign the library with ad-hoc signature for development
+          codesign --force --sign - "$FRAMEWORKS_DIR/libssh2.dylib"
+          
+          echo "Successfully copied libssh2.dylib to $FRAMEWORKS_DIR"
+        else
+          echo "ERROR: libssh2.dylib not found at $LIBSSH2_PATH"
+          exit 1
+        fi
+      SCRIPT
+    end
   end
 end

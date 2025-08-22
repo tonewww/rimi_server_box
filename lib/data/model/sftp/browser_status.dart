@@ -1,5 +1,5 @@
 // Use libssh2 adapters instead of dartssh2
-import 'package:server_box/core/libssh2/ssh_adapter.dart';
+import 'package:server_box/core/libssh2/ssh_adapter.dart' hide SftpClient;
 import 'package:server_box/core/libssh2/sftp_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 
