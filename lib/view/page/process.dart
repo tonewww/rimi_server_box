@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapter instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:server_box/core/extension/context/locale.dart';
@@ -60,8 +61,7 @@ class _ProcessPageState extends State<ProcessPage> {
     if (mounted) {
       final systemType = widget.args.spi.server?.value.status.system;
       final result = await _client
-          ?.run(ShellFunc.process.exec(widget.args.spi.id, systemType: systemType))
-          .string;
+          ?.run(ShellFunc.process.exec(widget.args.spi.id, systemType: systemType));
       if (result == null || result.isEmpty) {
         context.showSnackBar(libL10n.empty);
         return;

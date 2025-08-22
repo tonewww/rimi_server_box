@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:computer/computer.dart';
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapters instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
+import 'package:server_box/core/libssh2/sftp_adapter.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:fl_lib/fl_lib.dart';

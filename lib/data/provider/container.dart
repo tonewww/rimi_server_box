@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapters instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:server_box/core/extension/ssh_client.dart';
@@ -69,7 +70,7 @@ class ContainerProvider extends ChangeNotifier {
     }
 
     final res = await client?.run(_wrap(ContainerCmdType.images.exec(type)));
-    if (res?.string.toLowerCase().contains('permission denied') ?? false) {
+    if (res?.toLowerCase().contains('permission denied') ?? false) {
       return sudoCompleter.complete(true);
     }
     return sudoCompleter.complete(false);

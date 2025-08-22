@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapter instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +13,8 @@ import 'package:provider/provider.dart';
 
 import 'package:server_box/core/chan.dart';
 import 'package:server_box/core/extension/context/locale.dart';
-import 'package:server_box/core/utils/server.dart';
+// Use libssh2 version of genClient
+import 'package:server_box/core/utils/server_libssh2.dart';
 import 'package:server_box/core/utils/ssh_auth.dart';
 import 'package:server_box/data/model/server/server_private_info.dart';
 import 'package:server_box/data/model/server/snippet.dart';
@@ -81,7 +83,7 @@ class SSHPageState extends State<SSHPage>
 
   bool _isDark = false;
   Timer? _virtKeyLongPressTimer;
-  late SSHClient? _client = widget.args.spi.server?.value.client;
+  SSHClient? _client;
   SSHSession? _session;
   Timer? _discontinuityTimer;
 

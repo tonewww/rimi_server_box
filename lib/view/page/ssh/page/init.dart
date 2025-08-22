@@ -56,7 +56,7 @@ extension _Init on SSHPageState {
     _terminal.buffer.setCursor(0, 0);
 
     _terminal.onOutput = (data) {
-      session.write(utf8.encode(data));
+      session.stdin.add(utf8.encode(data));
     };
     _terminal.onResize = (width, height, pixelWidth, pixelHeight) {
       session.resizeTerminal(width, height);

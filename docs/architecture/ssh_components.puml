@@ -1,0 +1,151 @@
+@startuml SSH组件架构图
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam roundcorner 10
+
+title SSH 核心组件架构
+
+package "UI层" #E8F4FD {
+    class SSHPage {
+        - _terminal: Terminal
+        - _client: SSHClient
+        - _session: SSHSession
+        - _sessionId: String
+        --
+        + initState()
+        + _initTerminal()
+        + _listen(Stream)
+        + dispose()
+    }
+    
+    class Terminal {
+        - buffer: Buffer
+        - onOutput: Function
+        - onResize: Function
+        --
+        + write(String)
+        + textInput(String)
+        + keyInput(TerminalKey)
+        + clear()
+    }
+}
+
+package "业务逻辑层" #FFF4E6 {
+    class genClient {
+        --
+        + genClient(Spi): SSHClient
+        + loadIdentity(String): List<SSHKeyPair>
+        + decryptPem(List<String>): String
+    }
+    
+    class TermSessionManager {
+        - _entries: Map<String, Entry>
+        - _activeId: String
+        --
+        + add(id, spi, status)
+        + updateStatus(id, status)
+        + remove(id)
+        + setActive(id)
+    }
+}
+
+package "SSH协议层 (dartssh2)" #F0F8FF {
+    class SSHClient {
+        - socket: SSHSocket
+        - username: String
+        - identities: List<SSHKeyPair>
+        --
+        + shell(pty, env): SSHSession
+        + execute(cmd): SSHSession
+        + ping()
+        + close()
+    }
+    
+    class SSHSession {
+        - stdin: StreamSink
+        - stdout: Stream
+        - stderr: Stream
+        --
+        + write(data)
+        + resizeTerminal(w, h)
+        + close()
+        + done: Future
+    }
+    
+    class SSHSocket {
+        - host: String
+        - port: int
+        --
+        + connect(host, port): SSHSocket
+        + forwardLocal(host, port): SSHSocket
+    }
+}
+
+package "数据模型" #F5F5F5 {
+    class Spi {
+        + id: String
+        + name: String
+        + ip: String
+        + port: int
+        + user: String
+        + pwd: String
+        + keyId: String
+        + jumpId: String
+        + envs: Map
+    }
+    
+    enum TermSessionStatus {
+        connecting
+        connected
+        disconnected
+    }
+    
+    enum GenSSHClientStatus {
+        socket
+        key
+        pwd
+    }
+}
+
+' 关系定义
+SSHPage --> Terminal: 使用
+SSHPage --> genClient: 调用
+SSHPage --> TermSessionManager: 管理会话
+SSHPage --> SSHClient: 持有
+SSHPage --> SSHSession: 持有
+
+genClient --> SSHClient: 创建
+genClient --> SSHSocket: 创建连接
+genClient --> Spi: 读取配置
+
+SSHClient --> SSHSession: 创建
+SSHClient --> SSHSocket: 使用
+
+Terminal <--> SSHSession: 数据流
+
+TermSessionManager --> TermSessionStatus: 使用
+genClient --> GenSSHClientStatus: 状态回调
+
+note right of SSHPage
+  主要职责：
+  1. 管理SSH连接生命周期
+  2. 处理UI交互
+  3. 绑定Terminal和Session
+end note
+
+note right of genClient
+  主要职责：
+  1. 处理认证逻辑
+  2. 支持跳板服务器
+  3. 创建SSH客户端
+end note
+
+note bottom of SSHSession
+  数据流：
+  用户输入 -> Terminal.onOutput -> Session.stdin -> 服务器
+  服务器 -> Session.stdout/stderr -> Terminal.write -> 显示
+end note
+
+@enduml

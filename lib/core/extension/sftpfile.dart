@@ -1,4 +1,5 @@
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 SFTP adapter instead of dartssh2
+import 'package:server_box/core/libssh2/sftp_adapter.dart';
 import 'package:server_box/view/widget/unix_perm.dart';
 
 extension SftpFileX on SftpFileMode {

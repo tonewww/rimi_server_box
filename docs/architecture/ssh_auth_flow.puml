@@ -1,0 +1,68 @@
+@startuml SSH认证流程
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam activityBackgroundColor #FFF4E6
+skinparam activityBorderColor #FF9800
+skinparam decisionBackgroundColor #FFE0B2
+skinparam arrowThickness 2
+
+title SSH 认证流程图
+
+start
+
+:读取服务器配置(Spi);
+
+if (是否有跳板服务器?) then (是)
+  :递归调用genClient创建跳板连接;
+  :通过forwardLocal建立隧道;
+else (否)
+  :直接连接目标服务器;
+endif
+
+:建立TCP Socket连接;
+
+:创建SSHClient实例;
+
+if (认证方式?) then (密钥认证)
+  if (密钥是否加密?) then (是)
+    :提示输入密钥密码;
+    :解密私钥;
+  else (否)
+  endif
+  :加载私钥(loadIdentity);
+  :设置client.identities;
+  :尝试公钥认证;
+  
+elseif (密码认证) then
+  :设置onPasswordRequest回调;
+  if (密码存在?) then (是)
+    :返回存储的密码;
+  else (否)
+    :弹出密码输入框;
+    :用户输入密码;
+  endif
+  :尝试密码认证;
+  
+else (交互式认证)
+  :设置onUserInfoRequest回调;
+  :处理服务器认证提示;
+  :用户输入认证信息;
+  :尝试keyboard-interactive认证;
+endif
+
+if (认证成功?) then (是)
+  :返回SSHClient实例;
+  :建立Shell会话;
+  stop
+else (否)
+  if (还有其他认证方式?) then (是)
+    :尝试下一种认证方式;
+    :backward:认证方式?;
+  else (否)
+    :抛出认证失败异常;
+    :显示错误信息;
+    stop
+  endif
+endif
+
+@enduml

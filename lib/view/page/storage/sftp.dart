@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapters instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
+import 'package:server_box/core/libssh2/sftp_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
@@ -167,7 +169,7 @@ extension _UI on _SftpPageState {
   Widget _buildItem(SftpName file, {VoidCallback? beforeTap}) {
     final isDir = file.attr.isDirectory;
     final trailing = Text(
-      '${_getTime(file.attr.modifyTime)}\n${file.attr.mode?.str ?? ''}',
+      '${_getTime(file.attr.modifyTime)}\n${file.attr.mode != null ? SftpFileMode(file.attr.mode!).str : ''}',
       style: UIs.textGrey,
       textAlign: TextAlign.right,
     );
@@ -215,7 +217,7 @@ extension _Actions on _SftpPageState {
         onTap: () async {
           context.pop();
 
-          final perm = file.attr.mode?.toUnixPerm() ?? UnixPerm.empty;
+          final perm = file.attr.mode != null ? SftpFileMode(file.attr.mode!).toUnixPerm() : UnixPerm.empty;
           var newPerm = perm.copyWith();
           final ok = await context.showRoundDialog(
             child: UnixPermEditor(perm: perm, onChanged: (p) => newPerm = p),

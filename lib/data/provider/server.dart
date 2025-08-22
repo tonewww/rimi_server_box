@@ -3,11 +3,14 @@ import 'dart:async';
 // import 'dart:io';
 
 import 'package:computer/computer.dart';
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapters instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
+import 'package:server_box/core/libssh2/sftp_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/core/extension/ssh_client.dart';
 import 'package:server_box/core/sync.dart';
-import 'package:server_box/core/utils/server.dart';
+// Use libssh2 version of genClient
+import 'package:server_box/core/utils/server_libssh2.dart';
 import 'package:server_box/core/utils/ssh_auth.dart';
 import 'package:server_box/data/helper/system_detector.dart';
 import 'package:server_box/data/model/app/error.dart';
@@ -443,7 +446,7 @@ class ServerProvider extends Provider {
     String? raw;
 
     try {
-      raw = await sv.client?.run(ShellFunc.status.exec(spi.id, systemType: sv.status.system)).string;
+      raw = await sv.client?.run(ShellFunc.status.exec(spi.id, systemType: sv.status.system));
       //dprint('Get status from ${spi.name}:\n$raw');
       segments = raw?.split(ScriptConstants.separator).map((e) => e.trim()).toList();
       if (raw == null || raw.isEmpty || segments == null || segments.isEmpty) {

@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapters instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
+import 'package:server_box/core/libssh2/sftp_adapter.dart';
 import 'package:easy_isolate/easy_isolate.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:server_box/core/utils/server.dart';
@@ -97,7 +99,7 @@ Future<void> _download(SftpReq req, SendPort mainSendPort, SendErrorFunction sen
       final fileData = file.read(offset: totalRead, length: chunkSize);
       await for (var chunk in fileData) {
         localFile.add(chunk);
-        totalRead += chunk.length;
+        totalRead += chunk.length as int;
         mainSendPort.send(totalRead / size * 100);
       }
     }

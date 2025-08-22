@@ -1,0 +1,149 @@
+@startuml SSH连接交互流程
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam boxPadding 10
+skinparam participantPadding 20
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 5
+skinparam maxMessageSize 200
+
+title SSH 连接交互流程时序图
+
+participant "用户界面" as User
+participant "SSH页面" as SSHPage
+participant "Terminal组件" as Terminal
+participant "genClient函数" as GenClient
+participant "SSHSocket" as SSHSocket
+participant "SSHClient" as SSHClient
+participant "SSHSession" as SSHSession
+participant "SSH服务器" as Server
+participant "会话管理器" as SessionMgr
+
+== 初始化阶段 ==
+User -> SSHPage: 点击连接SSH
+activate SSHPage
+SSHPage -> SSHPage: initState()
+SSHPage -> SessionMgr: add(sessionId, status:connecting)
+activate SessionMgr
+SSHPage -> Terminal: 创建Terminal实例
+activate Terminal
+SSHPage -> SSHPage: afterFirstLayout()
+SSHPage -> SSHPage: _initTerminal()
+
+== 连接建立阶段 ==
+SSHPage -> Terminal: writeLn("等待连接...")
+SSHPage -> GenClient: genClient(spi, onStatus)
+activate GenClient
+
+GenClient -> GenClient: 检查跳板服务器
+alt 有跳板服务器
+    GenClient -> GenClient: 递归调用genClient(jumpSpi)
+    GenClient -> SSHSocket: forwardLocal(ip, port)
+else 直连
+    GenClient -> SSHSocket: connect(ip, port, timeout)
+end
+
+activate SSHSocket
+SSHSocket -> Server: TCP连接
+activate Server
+Server --> SSHSocket: TCP连接成功
+
+GenClient -> SSHClient: new SSHClient(socket, username)
+activate SSHClient
+
+alt 密钥认证
+    GenClient -> GenClient: loadIdentity(privateKey)
+    GenClient -> SSHClient: 设置identities
+else 密码认证
+    GenClient -> SSHClient: 设置onPasswordRequest
+end
+
+SSHClient -> Server: SSH握手
+Server --> SSHClient: SSH握手成功
+
+SSHClient -> Server: 用户认证
+Server --> SSHClient: 认证成功
+
+GenClient --> SSHPage: 返回SSHClient实例
+deactivate GenClient
+
+== Shell会话建立 ==
+SSHPage -> Terminal: writeLn("执行: Shell")
+SSHPage -> SSHClient: shell(pty, environment)
+
+SSHClient -> SSHSession: 创建Session
+activate SSHSession
+SSHSession -> Server: 请求PTY
+Server --> SSHSession: PTY分配成功
+SSHSession -> Server: 请求Shell
+Server --> SSHSession: Shell启动
+
+SSHClient --> SSHPage: 返回SSHSession
+SSHPage -> SessionMgr: updateStatus(sessionId, connected)
+
+== 数据流绑定 ==
+SSHPage -> Terminal: 清空缓冲区
+SSHPage -> Terminal: 设置onOutput回调
+SSHPage -> Terminal: 设置onResize回调
+SSHPage -> SSHSession: 监听stdout
+SSHPage -> SSHSession: 监听stderr
+
+== 交互阶段 ==
+group 用户交互循环
+    User -> Terminal: 输入命令
+    Terminal -> Terminal: onOutput(data)
+    Terminal -> SSHSession: write(utf8.encode(data))
+    SSHSession -> Server: 发送数据
+    
+    Server -> Server: 执行命令
+    Server --> SSHSession: 返回输出(stdout/stderr)
+    
+    alt stdout数据
+        SSHSession --> Terminal: stdout.stream
+        Terminal -> Terminal: write(data)
+        Terminal -> User: 显示输出
+    else stderr数据
+        SSHSession --> Terminal: stderr.stream
+        Terminal -> Terminal: write(data)
+        Terminal -> User: 显示错误
+    end
+end
+
+== 窗口调整（可选） ==
+opt 窗口大小变化
+    User -> Terminal: 调整窗口
+    Terminal -> Terminal: onResize(width, height)
+    Terminal -> SSHSession: resizeTerminal(width, height)
+    SSHSession -> Server: 更新PTY大小
+end
+
+== 保活机制 ==
+group 每5秒循环
+    SSHPage -> SSHClient: ping()
+    SSHClient -> Server: 发送保活包
+    alt 成功
+        Server --> SSHClient: 响应
+    else 超时/失败
+        SSHPage -> Terminal: writeLn("Connection lost")
+        SSHPage -> SessionMgr: updateStatus(disconnected)
+        SSHPage -> User: 显示断开对话框
+    end
+end
+
+== 断开连接 ==
+opt 用户主动断开
+    User -> SSHPage: 关闭页面
+    SSHPage -> SSHSession: close()
+    SSHSession -> Server: 关闭连接
+    deactivate Server
+    SSHPage -> SessionMgr: remove(sessionId)
+    deactivate SessionMgr
+    SSHPage -> SSHPage: dispose()
+    deactivate SSHSession
+    deactivate SSHClient
+    deactivate SSHSocket
+    deactivate Terminal
+    deactivate SSHPage
+end
+
+@enduml

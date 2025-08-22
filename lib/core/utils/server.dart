@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:dartssh2/dartssh2.dart';
+// Use libssh2 adapter instead of dartssh2
+import 'package:server_box/core/libssh2/ssh_adapter.dart';
 import 'package:fl_lib/fl_lib.dart';
 import 'package:flutter/foundation.dart';
 import 'package:server_box/data/model/app/error.dart';
@@ -94,7 +95,7 @@ Future<SSHClient> genClient(
     return SSHClient(
       socket,
       username: alterUser ?? spi.user,
-      onPasswordRequest: () => spi.pwd,
+      onPasswordRequest: () => spi.pwd ?? '',
       onUserInfoRequest: onKeyboardInteractive,
       // printDebug: debugPrint,
       // printTrace: debugPrint,

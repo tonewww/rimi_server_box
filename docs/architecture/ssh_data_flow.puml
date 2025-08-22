@@ -1,0 +1,55 @@
+@startuml SSH数据流图
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam activityBackgroundColor #E8F4FD
+skinparam activityBorderColor #2E86AB
+skinparam activityFontSize 12
+skinparam arrowThickness 2
+skinparam shadowing false
+
+title SSH 数据流转图
+
+|用户输入流程|
+start
+:用户在Terminal输入字符;
+:Terminal捕获键盘事件;
+:触发Terminal.onOutput回调;
+:调用SSHSession.write(utf8.encode(data));
+:数据写入SSHSession.stdin流;
+:通过SSH协议加密传输;
+:发送到SSH服务器;
+:服务器Shell接收输入;
+
+|服务器响应流程|
+:服务器执行命令;
+if (输出类型?) then (stdout)
+  :标准输出数据;
+  :通过SSHSession.stdout流返回;
+else (stderr)
+  :错误输出数据;
+  :通过SSHSession.stderr流返回;
+endif
+
+:SSH协议解密数据;
+:触发Stream监听器;
+:调用Terminal.write(data);
+:Terminal解析ANSI转义序列;
+:更新Terminal缓冲区;
+:渲染到屏幕显示;
+
+|特殊处理|
+if (是否包含控制字符?) then (是)
+  :处理特殊控制序列;
+  note right
+    - 光标移动
+    - 颜色设置
+    - 清屏操作
+    - 终端模式切换
+  end note
+else (否)
+  :直接显示文本;
+endif
+
+stop
+
+@enduml
