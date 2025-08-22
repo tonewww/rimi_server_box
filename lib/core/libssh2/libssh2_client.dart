@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
 import 'package:server_box/core/libssh2/ssh_logger.dart';
 import 'package:server_box/core/libssh2/ssh_message.dart';
 
@@ -39,6 +40,16 @@ class LibSSH2Client {
   Stream<Uint8List> get stdout => _stdoutController?.stream ?? const Stream.empty();
   Stream<Uint8List> get stderr => _stderrController?.stream ?? const Stream.empty();
   SSHConnectionStatus get status => _status;
+  
+  /// Check if a command is available in the system
+  Future<bool> _isCommandAvailable(String command) async {
+    try {
+      final result = await Process.run('which', [command]);
+      return result.exitCode == 0;
+    } catch (e) {
+      return false;
+    }
+  }
 
   /// Connect to SSH server
   Future<void> connect() async {
@@ -71,7 +82,10 @@ class LibSSH2Client {
       
       if (password != null) {
         logger.debug('[AUTH] Password authentication will be used');
-        // Note: We'll handle password via sshpass or expect
+        // Disable password prompts on stdin when using password auth
+        args.addAll(['-o', 'PasswordAuthentication=yes']);
+        args.addAll(['-o', 'PreferredAuthentications=password']);
+        args.addAll(['-o', 'PubkeyAuthentication=no']);
       }
       
       args.add('$username@$host');
@@ -79,13 +93,90 @@ class LibSSH2Client {
       logger.info('[CONNECT] Starting SSH process with args: ${args.join(' ')}');
       
       // Start SSH process
-      if (password != null && Platform.isLinux) {
-        // Use sshpass for password authentication on Linux
+      if (password != null && await _isCommandAvailable('sshpass')) {
+        // Use sshpass for password authentication if available
+        logger.info('[AUTH] Using sshpass for password authentication');
         _process = await Process.start(
           'sshpass',
           ['-p', password!, 'ssh', ...args],
           mode: ProcessStartMode.normal,
         );
+      } else if (password != null && Platform.isMacOS) {
+        // On macOS, use expect with better error handling
+        logger.info('[AUTH] Using expect for password authentication on macOS');
+        
+        // Create expect script that properly handles interaction
+        final expectScript = '''
+#!/usr/bin/expect -f
+log_user 1
+set timeout -1
+spawn ssh ${args.join(' ')}
+
+expect {
+  -re "Are you sure you want to continue connecting" {
+    send "yes\\r"
+    exp_continue
+  }
+  -re "assword:" {
+    send "$password\\r"
+    set timeout 5
+    expect {
+      -re "Permission denied.*assword" {
+        exit 1
+      }
+      -re {[\\\$#>]\\s} {
+        # Successfully logged in
+        set timeout -1
+        interact
+      }
+      -re "Last login" {
+        # Successfully logged in
+        set timeout -1
+        interact
+      }
+      timeout {
+        # Assume login successful if no error
+        set timeout -1
+        interact
+      }
+    }
+  }
+  timeout {
+    # Connection timeout
+    exit 2
+  }
+  eof {
+    # End of file - SSH connection closed
+    exit 0
+  }
+}
+
+# Keep the process alive
+wait
+''';
+        
+        // Write expect script to temp file
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File('${tempDir.path}/ssh_expect_${DateTime.now().millisecondsSinceEpoch}.exp');
+        await tempFile.writeAsString(expectScript);
+        await Process.run('chmod', ['+x', tempFile.path]);
+        
+        _process = await Process.start(
+          'expect',
+          ['-f', tempFile.path],
+          mode: ProcessStartMode.normal,
+          environment: {
+            'TERM': 'xterm-256color',
+            'LC_ALL': 'en_US.UTF-8',
+          },
+        );
+        
+        // Keep the script file until process exits
+        _process!.exitCode.then((_) {
+          if (tempFile.existsSync()) {
+            tempFile.deleteSync();
+          }
+        });
       } else {
         _process = await Process.start(
           'ssh',
@@ -187,49 +278,79 @@ class LibSSH2Client {
     logger.debug('[CONNECT] Waiting for connection establishment');
     
     final completer = Completer<void>();
-    StreamSubscription? subscription;
+    StreamSubscription? stderrSubscription;
+    StreamSubscription? stdoutSubscription;
     Timer? timeoutTimer;
+    bool passwordSent = false;
     
-    // Set up timeout
-    timeoutTimer = Timer(timeout, () {
-      logger.error('[CONNECT] Connection timeout after ${timeout.inSeconds} seconds');
+    // For macOS with expect, we need different connection detection
+    final isUsingExpect = password != null && Platform.isMacOS;
+    
+    // Set up timeout - shorter for expect since it handles its own timeout
+    final connectionTimeout = isUsingExpect ? const Duration(seconds: 10) : timeout;
+    timeoutTimer = Timer(connectionTimeout, () {
+      logger.error('[CONNECT] Connection timeout after ${connectionTimeout.inSeconds} seconds');
       if (!completer.isCompleted) {
-        subscription?.cancel();
+        stderrSubscription?.cancel();
+        stdoutSubscription?.cancel();
         completer.completeError(TimeoutException('SSH connection timeout'));
       }
     });
     
-    // Listen for connection indicators
-    subscription = _processStdout!.listen((data) {
+    // Listen for password prompt in stderr (only if not using expect)
+    if (!isUsingExpect) {
+      stderrSubscription = _processStderr!.listen((data) {
+        final error = utf8.decode(data, allowMalformed: true);
+        
+        // Check for password prompt
+        if (!passwordSent && password != null && 
+            (error.contains('password:') || error.contains('Password:')) &&
+            !error.contains('read_passphrase')) {
+          logger.info('[AUTH] Password prompt detected, sending password');
+          passwordSent = true;
+          _process!.stdin.writeln(password!);
+          _process!.stdin.flush();
+        }
+        
+        // Check for connection errors
+        if (error.contains('Connection refused') ||
+            error.contains('No route to host') ||
+            error.contains('Permission denied')) {
+          logger.error('[CONNECT] Connection error: $error');
+          if (!completer.isCompleted) {
+            timeoutTimer?.cancel();
+            stderrSubscription?.cancel();
+            stdoutSubscription?.cancel();
+            completer.completeError(Exception(error));
+          }
+        }
+      });
+    }
+    
+    // Listen for connection success in stdout
+    stdoutSubscription = _processStdout!.listen((data) {
       final output = utf8.decode(data, allowMalformed: true);
       logger.debug('[CONNECT] Checking output for connection: ${output.substring(0, output.length.clamp(0, 100))}');
+      
+      // For expect, look for spawn command or debug output
+      if (isUsingExpect && output.contains('spawn ssh')) {
+        // Expect has started SSH, wait a bit more for actual connection
+        return;
+      }
       
       // Check for common shell prompts or welcome messages
       if (output.contains('\$') || 
           output.contains('#') || 
           output.contains('>') ||
           output.contains('Last login') ||
-          output.contains('Welcome')) {
+          output.contains('Welcome') ||
+          (isUsingExpect && output.contains('debug1:'))) {
         logger.info('[CONNECT] Connection established - prompt detected');
         if (!completer.isCompleted) {
           timeoutTimer?.cancel();
-          subscription?.cancel();
+          stderrSubscription?.cancel();
+          stdoutSubscription?.cancel();
           completer.complete();
-        }
-      }
-    });
-    
-    // Also check stderr for errors
-    _processStderr!.listen((data) {
-      final error = utf8.decode(data, allowMalformed: true);
-      if (error.contains('Connection refused') ||
-          error.contains('No route to host') ||
-          error.contains('Permission denied')) {
-        logger.error('[CONNECT] Connection error: $error');
-        if (!completer.isCompleted) {
-          timeoutTimer?.cancel();
-          subscription?.cancel();
-          completer.completeError(Exception(error));
         }
       }
     });
