@@ -259,15 +259,15 @@ class LibSSH2FFIClient {
     final buffer = calloc<Uint8>(4096);
     
     try {
-      // Read stdout
-      final bytesRead = LibSSH2.channelRead(_channel!, buffer, 4096);
+      // Read stdout (stream_id = 0)
+      final bytesRead = LibSSH2.channelReadEx(_channel!, 0, buffer, 4096);
       if (bytesRead > 0) {
         final data = Uint8List.fromList(buffer.asTypedList(bytesRead));
         _stdoutController?.add(data);
       }
       
-      // Read stderr
-      final stderrBytesRead = LibSSH2.channelReadStderr(_channel!, buffer, 4096);
+      // Read stderr (stream_id = 1 for SSH_EXTENDED_DATA_STDERR)
+      final stderrBytesRead = LibSSH2.channelReadEx(_channel!, 1, buffer, 4096);
       if (stderrBytesRead > 0) {
         final data = Uint8List.fromList(buffer.asTypedList(stderrBytesRead));
         _stderrController?.add(data);
@@ -389,13 +389,22 @@ class LibSSH2FFIClient {
     
     // Start shell
     logger.debug('[FFI] Starting shell');
+    final shellRequest = 'shell'.toNativeUtf8();
+    final nullPtr = nullptr;
     int shellResult;
     do {
-      shellResult = LibSSH2.channelShell(_channel!);
+      shellResult = LibSSH2.channelProcessStartup(
+        _channel!, 
+        shellRequest, 
+        'shell'.length,
+        nullPtr,
+        0
+      );
       if (shellResult == LibSSH2Error.eagain) {
         await Future.delayed(const Duration(milliseconds: 10));
       }
     } while (shellResult == LibSSH2Error.eagain);
+    malloc.free(shellRequest);
     
     if (shellResult != 0) {
       final error = _getLastError();
@@ -479,13 +488,21 @@ class LibSSH2FFIClient {
     
     try {
       // Execute command
+      final execRequest = 'exec'.toNativeUtf8();
       int execResult;
       do {
-        execResult = LibSSH2.channelExec(channel, commandPtr);
+        execResult = LibSSH2.channelProcessStartup(
+          channel,
+          execRequest,
+          'exec'.length,
+          commandPtr,
+          command.length
+        );
         if (execResult == LibSSH2Error.eagain) {
           await Future.delayed(const Duration(milliseconds: 10));
         }
       } while (execResult == LibSSH2Error.eagain);
+      malloc.free(execRequest);
       
       if (execResult != 0) {
         final error = _getLastError();
@@ -499,7 +516,7 @@ class LibSSH2FFIClient {
       
       try {
         while (true) {
-          final bytesRead = LibSSH2.channelRead(channel, buffer, 4096);
+          final bytesRead = LibSSH2.channelReadEx(channel, 0, buffer, 4096);
           if (bytesRead == 0) {
             if (LibSSH2.channelEof(channel) != 0) {
               break;
@@ -549,8 +566,9 @@ class LibSSH2FFIClient {
       
       int written = 0;
       while (written < bytes.length) {
-        final result = LibSSH2.channelWrite(
+        final result = LibSSH2.channelWriteEx(
           _channel!,
+          0, // stream_id = 0 for stdout
           buffer + written,
           bytes.length - written,
         );

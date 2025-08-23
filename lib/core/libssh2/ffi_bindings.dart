@@ -363,44 +363,34 @@ typedef LibSSH2ChannelRequestPtyEx = int Function(
     int widthPx,
     int heightPx);
 
-typedef LibSSH2ChannelShellNative = Int32 Function(LibSSH2ChannelPtr channel);
-typedef LibSSH2ChannelShell = int Function(LibSSH2ChannelPtr channel);
+typedef LibSSH2ChannelProcessStartupNative = Int32 Function(
+    LibSSH2ChannelPtr channel,
+    Pointer<Utf8> request,
+    Uint32 requestLen,
+    Pointer<Utf8> message,
+    Uint32 messageLen);
+typedef LibSSH2ChannelProcessStartup = int Function(
+    LibSSH2ChannelPtr channel,
+    Pointer<Utf8> request,
+    int requestLen,
+    Pointer<Utf8> message,
+    int messageLen);
 
-typedef LibSSH2ChannelExecNative = Int32 Function(
-    LibSSH2ChannelPtr channel, Pointer<Utf8> command);
-typedef LibSSH2ChannelExec = int Function(
-    LibSSH2ChannelPtr channel, Pointer<Utf8> command);
 
-typedef LibSSH2ChannelSubsystemNative = Int32 Function(
-    LibSSH2ChannelPtr channel, Pointer<Utf8> subsystem);
-typedef LibSSH2ChannelSubsystem = int Function(
-    LibSSH2ChannelPtr channel, Pointer<Utf8> subsystem);
+typedef LibSSH2ChannelReadExNative = IntPtr Function(
+    LibSSH2ChannelPtr channel, Int32 streamId, Pointer<Uint8> buffer, IntPtr bufferLen);
+typedef LibSSH2ChannelReadEx = int Function(
+    LibSSH2ChannelPtr channel, int streamId, Pointer<Uint8> buffer, int bufferLen);
 
-typedef LibSSH2ChannelReadNative = IntPtr Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, IntPtr bufferLen);
-typedef LibSSH2ChannelRead = int Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, int bufferLen);
 
-typedef LibSSH2ChannelReadStderrNative = IntPtr Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, IntPtr bufferLen);
-typedef LibSSH2ChannelReadStderr = int Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, int bufferLen);
+typedef LibSSH2ChannelWriteExNative = IntPtr Function(
+    LibSSH2ChannelPtr channel, Int32 streamId, Pointer<Uint8> buffer, IntPtr bufferLen);
+typedef LibSSH2ChannelWriteEx = int Function(
+    LibSSH2ChannelPtr channel, int streamId, Pointer<Uint8> buffer, int bufferLen);
 
-typedef LibSSH2ChannelWriteNative = IntPtr Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, IntPtr bufferLen);
-typedef LibSSH2ChannelWrite = int Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, int bufferLen);
 
-typedef LibSSH2ChannelWriteStderrNative = IntPtr Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, IntPtr bufferLen);
-typedef LibSSH2ChannelWriteStderr = int Function(
-    LibSSH2ChannelPtr channel, Pointer<Uint8> buffer, int bufferLen);
-
-typedef LibSSH2ChannelFlushNative = Int32 Function(LibSSH2ChannelPtr channel);
-typedef LibSSH2ChannelFlush = int Function(LibSSH2ChannelPtr channel);
-
-typedef LibSSH2ChannelFlushStderrNative = Int32 Function(LibSSH2ChannelPtr channel);
-typedef LibSSH2ChannelFlushStderr = int Function(LibSSH2ChannelPtr channel);
+typedef LibSSH2ChannelFlushExNative = Int32 Function(LibSSH2ChannelPtr channel, Int32 streamId);
+typedef LibSSH2ChannelFlushEx = int Function(LibSSH2ChannelPtr channel, int streamId);
 
 typedef LibSSH2ChannelEofNative = Int32 Function(LibSSH2ChannelPtr channel);
 typedef LibSSH2ChannelEof = int Function(LibSSH2ChannelPtr channel);
@@ -505,40 +495,21 @@ class LibSSH2 {
       .lookup<NativeFunction<LibSSH2ChannelRequestPtyExNative>>('libssh2_channel_request_pty_ex')
       .asFunction();
 
-  static final LibSSH2ChannelShell channelShell = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelShellNative>>('libssh2_channel_shell')
+  static final LibSSH2ChannelProcessStartup channelProcessStartup = _libssh2
+      .lookup<NativeFunction<LibSSH2ChannelProcessStartupNative>>('libssh2_channel_process_startup')
       .asFunction();
 
-  static final LibSSH2ChannelExec channelExec = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelExecNative>>('libssh2_channel_exec')
+
+  static final LibSSH2ChannelReadEx channelReadEx = _libssh2
+      .lookup<NativeFunction<LibSSH2ChannelReadExNative>>('libssh2_channel_read_ex')
       .asFunction();
 
-  static final LibSSH2ChannelSubsystem channelSubsystem = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelSubsystemNative>>('libssh2_channel_subsystem')
+  static final LibSSH2ChannelWriteEx channelWriteEx = _libssh2
+      .lookup<NativeFunction<LibSSH2ChannelWriteExNative>>('libssh2_channel_write_ex')
       .asFunction();
 
-  static final LibSSH2ChannelRead channelRead = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelReadNative>>('libssh2_channel_read_ex')
-      .asFunction();
-
-  static final LibSSH2ChannelReadStderr channelReadStderr = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelReadStderrNative>>('libssh2_channel_read_stderr')
-      .asFunction();
-
-  static final LibSSH2ChannelWrite channelWrite = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelWriteNative>>('libssh2_channel_write_ex')
-      .asFunction();
-
-  static final LibSSH2ChannelWriteStderr channelWriteStderr = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelWriteStderrNative>>('libssh2_channel_write_stderr')
-      .asFunction();
-
-  static final LibSSH2ChannelFlush channelFlush = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelFlushNative>>('libssh2_channel_flush_ex')
-      .asFunction();
-
-  static final LibSSH2ChannelFlushStderr channelFlushStderr = _libssh2
-      .lookup<NativeFunction<LibSSH2ChannelFlushStderrNative>>('libssh2_channel_flush_stderr')
+  static final LibSSH2ChannelFlushEx channelFlushEx = _libssh2
+      .lookup<NativeFunction<LibSSH2ChannelFlushExNative>>('libssh2_channel_flush_ex')
       .asFunction();
 
   static final LibSSH2ChannelEof channelEof = _libssh2
