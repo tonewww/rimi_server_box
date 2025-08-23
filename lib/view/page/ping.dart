@@ -18,7 +18,8 @@ class PingPage extends StatefulWidget {
   static const route = AppRouteNoArg(page: PingPage.new, path: '/ping');
 }
 
-class _PingPageState extends State<PingPage> with AutomaticKeepAliveClientMixin {
+class _PingPageState extends State<PingPage>
+    with AutomaticKeepAliveClientMixin {
   late TextEditingController _textEditingController;
   final _results = ValueNotifier(<PingResult>[]);
   bool get isInit => _results.value.isEmpty;
@@ -39,7 +40,10 @@ class _PingPageState extends State<PingPage> with AutomaticKeepAliveClientMixin 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Scaffold(body: _results.listenVal(_buildBody), floatingActionButton: _buildFAB());
+    return Scaffold(
+      body: _results.listenVal(_buildBody),
+      floatingActionButton: _buildFAB(),
+    );
   }
 
   Widget _buildFAB() {
@@ -71,7 +75,12 @@ class _PingPageState extends State<PingPage> with AutomaticKeepAliveClientMixin 
       context.showRoundDialog(
         title: libL10n.error,
         child: Text(e.toString()),
-        actions: [TextButton(onPressed: () => Pfs.copy(e.toString()), child: Text(libL10n.copy))],
+        actions: [
+          TextButton(
+            onPressed: () => Pfs.copy(e.toString()),
+            child: Text(libL10n.copy),
+          ),
+        ],
       );
       rethrow;
     }
@@ -97,9 +106,16 @@ class _PingPageState extends State<PingPage> with AutomaticKeepAliveClientMixin 
         contentPadding: const EdgeInsets.symmetric(vertical: 7, horizontal: 17),
         title: Text(
           result.serverName,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: UIs.primaryColor),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: UIs.primaryColor,
+          ),
         ),
-        subtitle: Text(_buildPingSummary(result, unknown, ms), style: UIs.text11),
+        subtitle: Text(
+          _buildPingSummary(result, unknown, ms),
+          style: UIs.text11,
+        ),
         trailing: Text(
           '${l10n.pingAvg}${result.statistic?.avg?.toStringAsFixed(2) ?? l10n.unknown} $ms',
           style: TextStyle(fontSize: 14, color: UIs.primaryColor),
@@ -146,7 +162,7 @@ class _PingPageState extends State<PingPage> with AutomaticKeepAliveClientMixin 
         if (e.client == null) {
           return;
         }
-        final result = await e.client!.run('ping -c 3 $target').string;
+        final result = await e.client!.run('ping -c 3 $target');
         _results.value.add(PingResult.parse(e.spi.name, result));
         // [ValueNotifier] only notify when value is changed
         // But we just add a element to list without changing the list itself
