@@ -68,3 +68,5 @@ trans.txt
 android/app/.cxx
 
 .claude/
+
+build/
