@@ -19,13 +19,19 @@
       "Bash(codesign:*)",
       "Bash(install_name_tool:*)",
       "Bash(export PUB_HOSTED_URL=https://pub.flutter-io.cn)",
-      "Bash(export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn)"
+      "Bash(export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn)",
+      "Bash(pod install:*)",
+      "Bash(xcodebuild:*)",
+      "Read(//opt/homebrew/**)",
+      "Bash(otool:*)",
+      "Read(//opt/homebrew/Cellar/libssh2/1.11.1/lib/**)"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
       "/opt/homebrew/lib",
-      "/Users/tgy/.pub-cache/git/fl_lib-1620fb055986dfcf7587d7a16eb994a39c0d5772/lib/src/core/store"
+      "/Users/tgy/.pub-cache/git/fl_lib-1620fb055986dfcf7587d7a16eb994a39c0d5772/lib/src/core/store",
+      "/Users/tgy/Library/Developer/Xcode/DerivedData"
     ]
   }
 }

@@ -125,6 +125,72 @@ class SSHClient {
     return await _client.execute(command);
   }
   
+  /// Execute a command with callback for stdin/stdout interaction
+  Future<(int, String)> exec(
+    Future<void> Function(SSHSession) callback, {
+    String? entry,
+  }) async {
+    logger.info('[ADAPTER] Executing command with callback, entry: $entry');
+    
+    // The entry command should be something like:
+    // mkdir -p /tmp/server_box
+    // cat > /tmp/server_box/srvboxm_v67.sh
+    // chmod 755 /tmp/server_box/srvboxm_v67.sh
+    
+    if (entry != null && entry.isNotEmpty) {
+      // Split the commands
+      final commands = entry.split('\n').where((cmd) => cmd.trim().isNotEmpty).toList();
+      
+      // Execute mkdir command if present
+      for (final cmd in commands) {
+        if (cmd.startsWith('mkdir')) {
+          await _client.execute(cmd);
+        }
+      }
+      
+      // Find the cat command
+      final catCmd = commands.firstWhere(
+        (cmd) => cmd.contains('cat >'),
+        orElse: () => '',
+      );
+      
+      if (catCmd.isNotEmpty) {
+        // Extract the file path from the cat command
+        final match = RegExp(r'cat\s+>\s+(.+)').firstMatch(catCmd);
+        if (match != null) {
+          final filePath = match.group(1)!.trim();
+          
+          // Get script content through the callback
+          final buffer = <int>[];
+          final session = SSHSession._(
+            client: _client,
+            logger: logger,
+            stdinBuffer: buffer,
+          );
+          
+          await callback(session);
+          
+          // Write the script content to the file
+          if (buffer.isNotEmpty) {
+            final scriptContent = String.fromCharCodes(buffer);
+            final writeCmd = "echo '${scriptContent.replaceAll("'", "'\"'\"'")}' > $filePath";
+            await _client.execute(writeCmd);
+          }
+        }
+      }
+      
+      // Execute chmod command if present
+      for (final cmd in commands) {
+        if (cmd.startsWith('chmod')) {
+          await _client.execute(cmd);
+        }
+      }
+    }
+    
+    // Return success
+    return (0, '');
+  }
+  
   /// Ping for keep-alive
   Future<void> ping() async {
     await _client.ping();
@@ -156,6 +222,7 @@ class SSHSession {
   final LibSSH2FFISession? _session;
   final String? _command;
   final String? _output;
+  final List<int>? _stdinBuffer;
   final SSHLogger logger;
   
   SSHSession._({
@@ -163,11 +230,13 @@ class SSHSession {
     LibSSH2FFISession? session,
     String? command,
     String? output,
+    List<int>? stdinBuffer,
     required this.logger,
   }) : _client = client,
        _session = session,
        _command = command,
-       _output = output;
+       _output = output,
+       _stdinBuffer = stdinBuffer;
   
   Stream<Uint8List> get stdout {
     if (_session != null) {
@@ -190,6 +259,10 @@ class SSHSession {
   Sink<Uint8List> get stdin {
     if (_session != null) {
       return _session.stdin;
+    }
+    // If we have a buffer for collecting stdin data, use it
+    if (_stdinBuffer != null) {
+      return _BufferSink(_stdinBuffer);
     }
     // For command execution, create a dummy sink
     return _DummySink();
@@ -229,6 +302,23 @@ class SSHSession {
 }
 
 /// Dummy sink for command execution
+/// Buffer sink that collects data into a list
+class _BufferSink implements Sink<Uint8List> {
+  final List<int> buffer;
+  
+  _BufferSink(this.buffer);
+  
+  @override
+  void add(Uint8List data) {
+    buffer.addAll(data);
+  }
+  
+  @override
+  void close() {
+    // Nothing to close
+  }
+}
+
 class _DummySink implements Sink<Uint8List> {
   @override
   void add(Uint8List data) {
@@ -269,6 +359,11 @@ class SSHPtyConfig {
   final int? width;
   final int? height;
   final String? type;
+  
+  // Alias properties for compatibility
+  int? get cols => width;
+  int? get rows => height;
+  String? get termType => type;
   
   SSHPtyConfig({this.width, this.height, this.type});
 }

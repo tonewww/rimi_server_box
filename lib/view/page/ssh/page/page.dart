@@ -100,6 +100,10 @@ class SSHPageState extends State<SSHPage>
 
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
 
+    // Close SSH connection
+    _session?.close();
+    _client?.close();
+
     if (--_sshConnCount <= 0) {
       WakelockPlus.disable();
       if (isAndroid) {
