@@ -36,7 +36,17 @@ void _runInZone(void Function() body) {
     },
   );
 
-  runZonedGuarded(body, (e, s) => print('[ZONE] $e\n$s'), zoneSpecification: zoneSpec);
+  runZonedGuarded(body, (e, s) {
+    print('[ZONE] $e\n$s');
+    final trace = s.toString().split('\n');
+    final sb = StringBuffer();
+    for (final line in trace) {
+      if (line.contains('package:server_box')) {
+        sb.writeln(line);
+      }
+    }
+    print(sb.toString());
+  }, zoneSpecification: zoneSpec);
 }
 
 Future<void> _initApp() async {
@@ -53,27 +63,41 @@ Future<void> _initApp() async {
 }
 
 Future<void> _initData() async {
+  print('[Init] Paths.init');
   await Paths.init(BuildData.name, bakName: 'srvbox_bak.json');
 
+  print('[Init] Hive.initFlutter');
   await Hive.initFlutter();
+  print('[Init] Hive.registerAdapters');
   Hive.registerAdapters();
 
+  print('[Init] PrefStore.shared.init');
   await PrefStore.shared.init(); // Call this before accessing any store
+  print('[Init] Stores.init');
   await Stores.init();
+  print('[Init] Stores.init finished');
 
   // It may effect the following logic, so await it.
   // DO DB migration before load any provider.
+  print('[Init] _doDbMigrate');
   await _doDbMigrate();
+  print('[Init] _doDbMigrate finished');
 
   // DO NOT change the order of these providers.
+  print('[Init] PrivateKeyProvider.instance.load');
   PrivateKeyProvider.instance.load();
+  print('[Init] SnippetProvider.instance.load');
   SnippetProvider.instance.load();
+  print('[Init] ServerProvider.instance.load');
   ServerProvider.instance.load();
+  print('[Init] SftpProvider.instance.load');
   SftpProvider.instance.load();
 
   if (Stores.setting.betaTest.fetch()) AppUpdate.chan = AppUpdateChan.beta;
 
+  print('[Init] FontUtils.loadFrom');
   FontUtils.loadFrom(Stores.setting.fontPath.fetch());
+  print('[Init] _initData finished');
 }
 
 void _setupDebug() {
@@ -93,7 +117,9 @@ void _doPlatformRelated() async {
   }
 
   final serversCount = Stores.server.keys().length;
-  Computer.shared.turnOn(workersCount: (serversCount / 3).round() + 1); // Plus 1 to avoid 0.
+  Computer.shared.turnOn(
+    workersCount: (serversCount / 3).round() + 1,
+  ); // Plus 1 to avoid 0.
 
   bakSync.sync();
 }
