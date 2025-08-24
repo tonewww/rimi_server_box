@@ -8,9 +8,9 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>keychain-access-groups</key>
+	<key>com.apple.security.keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.lollipopkit.serverbox</string>
+		<string>com.lollipopkit.serverBox</string>
 	</array>
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
