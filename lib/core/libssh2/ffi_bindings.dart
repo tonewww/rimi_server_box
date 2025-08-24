@@ -22,7 +22,7 @@ final DynamicLibrary _libssh2 = () {
   } else if (Platform.isMacOS) {
     // Try multiple paths for macOS, prioritizing bundled library
     final execDir = _getExecutableDir();
-    final projectRoot = '/Users/tgy/workspace/duotai/rimi_server_box';
+    final projectRoot = '/Users/tgy/workspace/duotai/lemon_ssh';
     final paths = [
       // Try @rpath first (for properly configured bundles)
       '@rpath/libssh2.dylib',

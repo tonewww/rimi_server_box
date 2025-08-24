@@ -24,14 +24,20 @@
       "Bash(xcodebuild:*)",
       "Read(//opt/homebrew/**)",
       "Bash(otool:*)",
-      "Read(//opt/homebrew/Cellar/libssh2/1.11.1/lib/**)"
+      "Read(//opt/homebrew/Cellar/libssh2/1.11.1/lib/**)",
+      "Bash(open:*)",
+      "Read(//opt/homebrew/**)",
+      "Bash(lsof:*)",
+      "Bash(log show:*)"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
       "/opt/homebrew/lib",
       "/Users/tgy/.pub-cache/git/fl_lib-1620fb055986dfcf7587d7a16eb994a39c0d5772/lib/src/core/store",
-      "/Users/tgy/Library/Developer/Xcode/DerivedData"
+      "/Users/tgy/Library/Developer/Xcode/DerivedData",
+      "/opt/homebrew/Cellar/libssh2/1.11.1/lib",
+      "/opt/homebrew/Cellar/openssl@3/3.5.2/lib"
     ]
   }
 }
