@@ -70,3 +70,5 @@ android/app/.cxx
 .claude/
 
 build/
+
+*.lock
